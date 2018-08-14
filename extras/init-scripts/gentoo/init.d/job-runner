@@ -1,0 +1,37 @@
+#!/sbin/runscript
+
+depend() {
+	need localmount
+	after bootmisc
+}
+
+checkconfig() {
+    if ! type "${JOB_RUNNER_CMD}" >/dev/null 2>/dev/null ; then
+            eerror "Please edit /etc/conf.d/job-runner"
+            eerror "Unable to locate the client command ${JOB_RUNNER_CMD}!"
+            return 1
+    fi
+    if [ -z "${JOB_RUNNER_HOME}" ] ; then
+            eerror "Please edit /etc/conf.d/job-runner"
+            eerror "I need to know what scanner work directory to use!"
+            return 1
+    fi
+    return 0
+}
+
+start() {
+	checkconfig || return $?
+
+	ebegin "Starting job-runner"
+	start-stop-daemon --start --exec ${JOB_RUNNER_CMD} ${JOB_RUNNER_HOME} \
+	    --pidfile /var/run/job-runner.pid 
+	eend $? "Failed to start job-runner"
+}
+
+stop() {
+	ebegin "Stopping job-runner"
+	start-stop-daemon --stop \
+		--pidfile /var/run/job-runner.pid \
+		--exec ${JOB_RUNNER_CMD}
+	eend $? "Failed to stop job-runner"
+}

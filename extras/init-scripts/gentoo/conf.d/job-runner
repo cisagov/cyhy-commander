@@ -1,0 +1,4 @@
+# /etc/conf.d/job-runner
+
+JOB_RUNNER_CMD="/usr/local/bin/job-runner"
+JOB_RUNNER_HOME="/home/fnsuser/scanner"

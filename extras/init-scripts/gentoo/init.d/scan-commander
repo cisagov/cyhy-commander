@@ -1,0 +1,38 @@
+#!/sbin/runscript
+
+depend() {
+	need localmount net
+	after bootmisc cron
+	use dns
+}
+
+checkconfig() {
+    if ! type "${COMMANDER_CMD}" >/dev/null 2>/dev/null ; then
+            eerror "Please edit /etc/conf.d/scan-commander"
+            eerror "Unable to locate the client command ${COMMANDER_CMD}!"
+            return 1
+    fi
+    if [ -z "${COMMANDER_HOME}" ] ; then
+            eerror "Please edit /etc/conf.d/scan-commander"
+            eerror "I need to know what scanner work directory to use!"
+            return 1
+    fi
+    return 0
+}
+
+start() {
+	checkconfig || return $?
+
+	ebegin "Starting scan-commander"
+	start-stop-daemon --start --exec ${COMMANDER_CMD} ${COMMANDER_HOME} \
+	    --pidfile /var/run/scan-commander.pid 
+	eend $? "Failed to start scan-commander"
+}
+
+stop() {
+	ebegin "Stopping scan-commander"
+	start-stop-daemon --stop \
+		--pidfile /var/run/scan-commander.pid \
+		--exec ${COMMANDER_CMD}
+	eend $? "Failed to stop scan-commander"
+}
