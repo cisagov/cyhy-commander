@@ -208,7 +208,7 @@ class Commander(object):
                 if len(paths.failed) == 0:
                     self.__logger.info('%s was copied successfully from %s to %s' % (job, env.host_string, destDir))
                     # remove remote dir
-                    run('rm -r %s' % jobPath)
+                    run('rm -rf %s' % jobPath)
                     self.__logger.info('%s was removed from %s' % (job, env.host_string))
                 local_job_path = os.path.join(destDir, job)
 
