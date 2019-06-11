@@ -19,8 +19,15 @@ This importer should handle the import of only one nessus file.'''
 
 class NessusImporter(object):
     SOURCE = 'nessus'
-    
-    def __init__(self, db):
+
+    def __init__(self, db, transition_hosts=True):
+        """Create an importer to handle one Nessus file.
+
+        Args:
+            transition_hosts: When set to False, hosts will not be transitioned
+            to the next stage/status.
+
+        """
         self.__logger = logging.getLogger(__name__)
         self.handler = NessusV2ContentHander(self.host_callback, self.report_callback, self.targets_callback,
                                              self.plugin_set_callback, self.port_range_callback, self.end_callback)
@@ -33,7 +40,8 @@ class NessusImporter(object):
         self.targets = None
         self.ticket_manager = VulnTicketManager(db, NessusImporter.SOURCE)
         self.attempted_to_clear_latest_flags = False
-                
+        self.__should_transition_hosts = transition_hosts
+
     def process(self, filename, gzipped=False):
         self.__logger.debug('Starting processing of %s' % filename)
         if gzipped:
@@ -128,8 +136,9 @@ class NessusImporter(object):
                     
     def end_callback(self):
         # move host out of RUNNING status
-        for ip in self.targets:
-            self.__ch_db.transition_host(ip)
+        if self.__should_transition_hosts:
+            for ip in self.targets:
+                self.__ch_db.transition_host(ip)
         self.ticket_manager.close_tickets()
         if not self.attempted_to_clear_latest_flags:
             self.__logger.warning('Reached end of Nessus import but did not clear "latest" flags')
