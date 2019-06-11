@@ -39,7 +39,7 @@ def import_nessus(db, filename, gzipped=True):
 def main():
     """Set up logging and call the import function."""
     args = docopt.docopt(__doc__, version=__version__)
-    print(args)
+
     # Set up logging
     log_level = args["--log-level"]
     try:
