@@ -28,7 +28,7 @@ from cyhy_commander.nessus import NessusImporter
 __version__ = "0.0.2"
 
 
-def import_nessus(db, filename, quiet=False, gzipped=True):
+def import_nessus(db, filename, gzipped=True):
     """Import a nessus file."""
     logging.info("Starting import of Nessus file: " + filename)
     importer = NessusImporter(db)
