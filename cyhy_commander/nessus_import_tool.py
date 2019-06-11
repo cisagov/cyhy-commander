@@ -32,7 +32,7 @@ def import_nessus(db, filename, gzipped=True):
     """Import a nessus file."""
     logging.info("Starting import of Nessus file: " + filename)
     # prevent hosts from changing stage/status during manual import
-    importer = NessusImporter(db, transition_hosts=False)
+    importer = NessusImporter(db, manual_scan=True)
     importer.process(filename, gzipped=gzipped)
     logging.info("Import completed.")
 
