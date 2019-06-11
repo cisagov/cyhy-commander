@@ -20,12 +20,12 @@ This importer should handle the import of only one nessus file.'''
 class NessusImporter(object):
     SOURCE = 'nessus'
 
-    def __init__(self, db, transition_hosts=True):
+    def __init__(self, db, manual_scan=False):
         """Create an importer to handle one Nessus file.
 
         Args:
-            transition_hosts: When set to False, hosts will not be transitioned
-            to the next stage/status.
+            manual_scan: When set to True, hosts will not be transitioned
+            to the next stage/status and scan times will assume to be now.
 
         """
         self.__logger = logging.getLogger(__name__)
@@ -38,12 +38,17 @@ class NessusImporter(object):
         self.current_ip_owner = None
         self.current_ip_time = None
         self.targets = None
-        self.ticket_manager = VulnTicketManager(db, NessusImporter.SOURCE)
+        self.ticket_manager = VulnTicketManager(
+            db, NessusImporter.SOURCE, manual_scan=True
+        )
         self.attempted_to_clear_latest_flags = False
-        self.__should_transition_hosts = transition_hosts
+        self.manual_scan = manual_scan
 
     def process(self, filename, gzipped=False):
         self.__logger.debug('Starting processing of %s' % filename)
+        if self.manual_scan:
+            # if we are doing a manual scan import we have to assume a current time
+            self.current_ip_time = util.utcnow()
         if gzipped:
             f = gzip.open(filename, 'r')
         else:
@@ -104,8 +109,10 @@ class NessusImporter(object):
         parsedHost['ip'] = self.current_ip
         self.current_ip_int = int(self.current_ip)
         self.current_ip_owner = self.__db.HostDoc.get_owner_of_ip(self.current_ip_int)
-        self.current_ip_time = parsedHost['end_time']
-        if self.current_ip_owner == None:
+        if not self.manual_scan:
+            # only change the time if we are not doing a manual scan import
+            self.current_ip_time = parsedHost["end_time"]
+        if self.current_ip_owner is None:
             self.current_ip_owner = UNKNOWN_OWNER
             self.__logger.warning('Could not find owner for %s (%d)' % (self.current_ip, self.current_ip_int))
             
@@ -135,8 +142,8 @@ class NessusImporter(object):
         self.ticket_manager.open_ticket(report, "vulnerability detected")
                     
     def end_callback(self):
-        # move host out of RUNNING status
-        if self.__should_transition_hosts:
+        if not self.manual_scan:
+            # move host out of RUNNING status
             for ip in self.targets:
                 self.__ch_db.transition_host(ip)
         self.ticket_manager.close_tickets()
