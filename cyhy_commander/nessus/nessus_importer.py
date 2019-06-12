@@ -24,7 +24,7 @@ class NessusImporter(object):
 
         Args:
             manual_scan: When set to True, hosts will not be transitioned
-            to the next stage/status and scan times will assume to be now.
+            to the next stage/status, and scan times are assumed to be now.
 
         """
         self.__logger = logging.getLogger(__name__)
