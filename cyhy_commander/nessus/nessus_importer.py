@@ -44,7 +44,7 @@ class NessusImporter(object):
         self.current_ip_time = None
         self.targets = None
         self.ticket_manager = VulnTicketManager(
-            db, NessusImporter.SOURCE, manual_scan=True
+            db, NessusImporter.SOURCE, manual_scan=manual_scan
         )
         self.attempted_to_clear_latest_flags = False
         self.manual_scan = manual_scan
