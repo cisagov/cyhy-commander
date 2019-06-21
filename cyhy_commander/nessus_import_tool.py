@@ -11,7 +11,7 @@ Options:
   -h --help              Show this message.
   --log-level=LEVEL      If specified, then the log level will be set to
                          the specified value.  Valid values are "debug", "info",
-                         "warning", "error", and "critical". [default: warning]
+                         "warning", "error", and "critical". [default: info]
   -s SECTION --section=SECTION   Configuration section to use.
 
 """
