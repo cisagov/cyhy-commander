@@ -163,9 +163,12 @@ class NessusImporter(object):
         self.ticket_manager.open_ticket(report, "vulnerability detected")
 
     def end_callback(self):
-        if not self.manual_scan:
-            # move host out of RUNNING status
-            for ip in self.targets:
+        for ip in self.targets:
+            if self.manual_scan:
+                # update host priority and reschedule host
+                self.__ch_db.update_host_priority_and_reschedule(ip)
+            else:
+                # move host out of RUNNING status
                 self.__ch_db.transition_host(ip)
         self.ticket_manager.close_tickets()
         if not self.attempted_to_clear_latest_flags:
