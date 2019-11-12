@@ -1,17 +1,10 @@
 #!/usr/bin/env python
 
-import sys
 from nmap_handler import NmapContentHander
 from xml.sax import parse
-from bson.errors import InvalidDocument
 import netaddr
-from cyhy.core import *
-from cyhy.db import (
-    CHDatabase,
-    IPPortTicketManager,
-    IPTicketManager,
-    DefaultHostStateManager,
-)
+from cyhy.core import STAGE
+from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
 
 
