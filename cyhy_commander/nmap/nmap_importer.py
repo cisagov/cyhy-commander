@@ -112,6 +112,14 @@ class NmapImporter(object):
             report = self.__db.PortScanDoc()
             util.copy_attrs(details, report)
             report.save()
+            if details.get("service", {}).get("name") in RISKY_SERVICES:
+                report["source_id"] = RISKY_SERVICES_SOURCE_ID
+                report["name"] = "Potentially Risky Service Detected: {}".format(
+                    details["service"]["name"]
+                )
+                self.__ticket_manager.open_ticket(
+                    report, "potentially risky service detected"
+                )
         return has_at_least_one_open_port
 
     def __store_os_details(self, parsed_host):
