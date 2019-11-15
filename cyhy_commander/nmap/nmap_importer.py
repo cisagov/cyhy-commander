@@ -7,6 +7,34 @@ from cyhy.core import STAGE
 from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
 
+RISKY_SERVICES_SOURCE_ID = 1  # Identifier for "risky service" tickets
+# Pulled from https://svn.nmap.org/nmap/nmap-services
+RISKY_SERVICES = [
+    "ftp",
+    "irc",
+    "kerberos",
+    "kerberos-adm",
+    "kerberos-sec",
+    "kerberos_master",
+    "klogin",
+    "kpasswd5",
+    "kpasswd",
+    "krb_prop",
+    "krbupdate",
+    "kshell",
+    "ldap",
+    "microsoft-ds",
+    "ms-sql-s",
+    "ms-wbt-server",
+    "msrpc",
+    "netbios-dgm",
+    "netbios-ns",
+    "netbios-ssn",
+    "sql-net",
+    "sqlnet",
+    "sqlsrv",
+    "telnet",
+]
 
 """
 Imports nmap xml output into the database
