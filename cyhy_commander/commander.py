@@ -239,7 +239,7 @@ class Commander(object):
             run('touch %s' % os.path.join(RUNNING_DIR, job_name, READY_FILE))
             self.__move_to_pushed(job_path)
         else:
-            self.__logger.error('Error pushing %s to host' % job_path)
+            self.__logger.error('Error pushing %s to host %s' % (job_path, env.host_string))
 
     def __unique_filename(self, path):
         if not os.path.exists(path):
