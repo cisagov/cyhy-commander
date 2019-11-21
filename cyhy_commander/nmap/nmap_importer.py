@@ -117,7 +117,7 @@ class NmapImporter(object):
                 report["name"] = "Potentially Risky Service Detected: {}".format(
                     details["service"]["name"]
                 )
-                report["details"]["service"] = details["service"]["name"]
+                report["service"] = details["service"]["name"]
                 self.__ticket_manager.open_ticket(
                     report, "potentially risky service detected"
                 )
