@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
-from nmap_handler import NmapContentHander
+# built-in python libraries
 from xml.sax import parse
+
+# third-party libraries (install with pip)
 import netaddr
+
+# local libraries
 from cyhy.core import STAGE
 from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
+from nmap_handler import NmapContentHander
 
 RISKY_SERVICES_SOURCE_ID = 1  # Identifier for "risky service" tickets
 # Pulled from https://svn.nmap.org/nmap/nmap-services
