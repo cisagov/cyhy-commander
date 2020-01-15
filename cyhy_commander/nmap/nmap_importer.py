@@ -7,7 +7,7 @@ from xml.sax import parse
 import netaddr
 
 # local libraries
-from cyhy.core import STAGE
+from cyhy.core import STAGE, UNKNOWN_OWNER
 from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
 from nmap_handler import NmapContentHander
@@ -140,6 +140,9 @@ class NmapImporter(object):
         ip = parsed_host["addr"]
         hostname = parsed_host.get("hostname", None)
         ip_owner = self.__db.HostDoc.get_owner_of_ip(ip)
+        if ip_owner is None:
+            ip_owner = UNKNOWN_OWNER
+            self.__logger.warning("Could not find owner for %s" % ip)
         host["owner"] = ip_owner
         time = parsed_host["endtime"]
         host.ip = ip  # sets ip and ip_int
