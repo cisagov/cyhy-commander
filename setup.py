@@ -20,7 +20,7 @@ setup(
     # long_description=open('README.txt').read(),
     install_requires=[
         "cyhy-core >= 0.0.2",
-        "Fabric >= 1.8.3, < 2.0.0",
+        "Fabric >= 2.0.0",
         "docopt >= 0.6.2",
         "python-daemon >= 1.6",
         "lockfile >= 0.9.1",

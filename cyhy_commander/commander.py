@@ -32,12 +32,10 @@ import traceback
 from ConfigParser import SafeConfigParser
 import logging
 
-from fabric.network import disconnect_all
-from fabric.tasks import Task, execute
-from fabric.api import task, run, env
-from fabric import operations
 import daemon
 from docopt import docopt
+from fabric import Config, Connection
+from fabric import ParallelGroup as Group
 
 from cyhy.db import CHDatabase
 from cyhy.core import *
@@ -47,9 +45,9 @@ from cyhy.db import database
 from cyhy.util import setup_logging
 
 # fabric configuration
-env.use_ssh_config = True
-env.keepalive = 30
-env.command_timeout = 60
+FABRIC_COMMAND_TIMEOUT = 60
+FABRIC_KEEPALIVE = 30
+FABRIC_USE_SSH_CONFIG = True
 
 # remote files
 RUNNING_DIR = "runner/running"
@@ -241,81 +239,92 @@ class Commander(object):
             )
         self.__failure_sinks = [TryAgainSink(self.__db)]
 
-    @task
-    def __done_jobs(self):
-        output = run("ls %s" % DONE_DIR)
-        if output.failed:
+    def __setup_fabric_group(self, hosts, connection_config):
+        connection_group = Group(*hosts, config=connection_config)
+        for connection in connection_group:
+            connection.transport.set_keepalive(FABRIC_KEEPALIVE)
+        return connection_group
+
+    def __get_job_list(self, connections, directory):
+        results = connections.run("ls %s" % directory)
+        for connection, result in results.failed.items():
             self.__logger.warning(
-                'Unable to get listing of "%s" on %s' % (DONE_DIR, env.host_string)
+                'Unable to get listing of "%s" on %s' % (directory, connection.host)
             )
-            output = ""
-        doneJobs = output.split()
-        for job in doneJobs:
-            jobPath = os.path.join(DONE_DIR, job)
-            output = run("ls -a %s" % (jobPath))
-            jobContents = output.split()
-            if DONE_FILE in jobContents:
-                self.__logger.info(
-                    "%s is ready for pickup on %s" % (job, env.host_string)
-                )
-                donePath = os.path.join(jobPath, DONE_FILE)
-                exitCode = run("cat %s" % donePath)
-                if exitCode == "0":
-                    destDir = SUCCESS_DIR
+        return results.succeeded
+
+    def __done_jobs(self, connections):
+        results = self.__get_job_list(connections, DONE_DIR)
+        for connection, result in outputs.items():
+            done_jobs = result.stdout.split()
+            for job in done_jobs:
+                job_path = os.path.join(DONE_DIR, job)
+                output = connection.run("ls -a %s" % (job_path)).stdout
+                job_contents = output.split()
+                if DONE_FILE in job_contents:
+                    self.__logger.info(
+                        "%s is ready for pickup on %s" % (job, connection.host)
+                    )
+                    done_path = os.path.join(job_path, DONE_FILE)
+                    exit_code = connection.run("cat %s" % done_path).exited
+                    if exit_code == 0:
+                        dest_dir = SUCCESS_DIR
+                    else:
+                        dest_dir = FAILED_DIR
+                        self.__logger.warning(
+                            "%s had a non-zero exit code: %d" % (job, exit_code)
+                        )
+
+                    try:
+                        result = connection.get(job_path, dest_dir)
+                        self.__logger.info(
+                            "%s was copied successfully from %s to %s"
+                            % (job, connection.host, dest_dir)
+                        )
+                        # remove remote dir
+                        result = connection.run("rm -rf %s" % job_path)
+                        if result.exited == 0:
+                            self.__logger.info(
+                                "%s was removed from %s" % (job, connection.host)
+                            )
+                    except Exception:
+                        self.__logger.error(
+                            "Error retriving %s from host %s"
+                            % (job_path, connection.host)
+                        )
+                    local_job_path = os.path.join(dest_dir, job)
+
+                    if dest_dir == SUCCESS_DIR:
+                        self.__process_successful_job(local_job_path)
+                    else:
+                        self.__process_failed_job(local_job_path)
+
                 else:
-                    destDir = FAILED_DIR
                     self.__logger.warning(
-                        "%s had a non-zero exit code: %s" % (job, exitCode)
+                        "%s is not ready for pickup on %s" % (job, connection.host)
                     )
 
-                paths = operations.get(jobPath, destDir)
-                if len(paths.failed) == 0:
-                    self.__logger.info(
-                        "%s was copied successfully from %s to %s"
-                        % (job, env.host_string, destDir)
-                    )
-                    # remove remote dir
-                    run("rm -rf %s" % jobPath)
-                    self.__logger.info(
-                        "%s was removed from %s" % (job, env.host_string)
-                    )
-                local_job_path = os.path.join(destDir, job)
+    def __running_job_count(self, connections):
+        counts = {}
+        results = self.__get_job_list(connections, RUNNING_DIR)
+        for connection, result in results:
+            running_jobs = result.stdout.split()
+            count = len(running_jobs)
+            counts[connection] = count
+        return counts
 
-                if destDir == SUCCESS_DIR:
-                    self.__process_successful_job(local_job_path)
-                else:
-                    self.__process_failed_job(local_job_path)
-
-            else:
-                self.__logger.warning(
-                    "%s is not ready for pickup on %s" % (job, env.host_string)
-                )
-
-    @task
-    def __running_job_count(self):
-        output = run("ls %s" % RUNNING_DIR)
-        if output.failed:
-            self.__logger.warning(
-                'Unable to get listing of "%s" on %s' % (RUNNING_DIR, env.host_string)
-            )
-            return None
-        runningJobs = output.split()
-        count = len(runningJobs)
-        return count
-
-    @task
-    def __push_job(self, job_path):
-        paths = operations.put(job_path, RUNNING_DIR)
-        if len(paths.failed) == 0:
+    def __push_job(self, connection, job_path):
+        try:
+            paths = connection.put(job_path, RUNNING_DIR)
             self.__logger.info(
-                "%s was pushed successfully to %s" % (job_path, env.host_string)
+                "%s was pushed successfully to %s" % (job_path, connection.host)
             )
             job_name = os.path.basename(job_path)
-            run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
+            connection.run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
             self.__move_to_pushed(job_path)
-        else:
+        except Exception:
             self.__logger.error(
-                "Error pushing %s to host %s" % (job_path, env.host_string)
+                "Error pushing %s to host %s" % (job_path, connection.host)
             )
 
     def __unique_filename(self, path):
@@ -381,7 +390,7 @@ class Commander(object):
                     "Not enough work available to fill %s hosts" % workgroup_name
                 )
                 break  # no more work to do
-            execute(self.__push_job, self, job_path, hosts=[lowest_host])
+            self.__push_job(lowest_host, job_path)
             counts[lowest_host] += 1
 
     def __process_successful_job(self, job_path):
@@ -519,6 +528,16 @@ class Commander(object):
         self.__setup_sources()
         self.__setup_sinks()
 
+        # Set up connection Groups
+        connection_config = Config(
+            {
+                "timeouts": {"command": FABRIC_COMMAND_TIMEOUT},
+                "load_ssh_configs": FABRIC_USE_SSH_CONFIG,
+            }
+        )
+        nmap_connections = self.__setup_fabric_group(nmap_hosts, connection_config)
+        nessus_connections = self.__setup_fabric_group(nessus_hosts, connection_config)
+
         # pairs of hosts and job sources
         work_groups = (
             (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
@@ -543,7 +562,7 @@ class Commander(object):
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
-                    execute(self.__done_jobs, self, hosts=hosts)
+                    self.__done_jobs(hosts)
 
                 # check for scheduled hosts
                 self.__logger.debug(
@@ -561,7 +580,7 @@ class Commander(object):
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
-                    counts = execute(self.__running_job_count, self, hosts=hosts)
+                    counts = self.__running_job_count(hosts)
                     self.__fill_hosts(counts, sources, workgroup_name, jobs_per_host)
                     all_workgroup_counts.update(counts)
 
@@ -587,7 +606,8 @@ class Commander(object):
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
         self.__logger.info("Shutting down.")
-        disconnect_all()
+        nmap_connections.close()
+        nessus_connections.close()
 
 
 def main():
