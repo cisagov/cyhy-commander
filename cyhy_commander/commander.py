@@ -35,7 +35,7 @@ import logging
 import daemon
 from docopt import docopt
 from fabric import Config, Connection
-from fabric import ParallelGroup as Group
+from fabric import ThreadingGroup as Group
 
 from cyhy.db import CHDatabase
 from cyhy.core import *
@@ -475,7 +475,6 @@ class Commander(object):
         return config
 
     def do_work(self):
-        env.warn_only = True
         self.__logger.info("Starting up.")
         self.__setup_directories()
 
@@ -533,6 +532,7 @@ class Commander(object):
             {
                 "timeouts": {"command": FABRIC_COMMAND_TIMEOUT},
                 "load_ssh_configs": FABRIC_USE_SSH_CONFIG,
+                "run": {"warn": True},
             }
         )
         nmap_connections = self.__setup_fabric_group(nmap_hosts, connection_config)
