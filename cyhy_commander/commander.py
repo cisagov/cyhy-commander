@@ -34,7 +34,8 @@ import logging
 
 import daemon
 from docopt import docopt
-from fabric import Config, Connection
+from fabric import Config as FabricConfig
+from fabric import Connection
 from fabric import ThreadingGroup as Group
 
 from cyhy.db import CHDatabase
@@ -240,8 +241,15 @@ class Commander(object):
         self.__failure_sinks = [TryAgainSink(self.__db)]
 
     def __setup_fabric_group(self, hosts, connection_config):
-        connection_group = Group(*hosts, config=connection_config)
+        if hosts:
+            connection_group = Group(*hosts, config=connection_config)
+        else:
+            connect_group = Group(config=connection_config)
+
         for connection in connection_group:
+            # We need to manually open the connection to populate
+            # connection.transport so we can set the keepalive.
+            connection.open()
             connection.transport.set_keepalive(FABRIC_KEEPALIVE)
         return connection_group
 
@@ -255,7 +263,7 @@ class Commander(object):
 
     def __done_jobs(self, connections):
         results = self.__get_job_list(connections, DONE_DIR)
-        for connection, result in outputs.items():
+        for connection, result in results.items():
             done_jobs = result.stdout.split()
             for job in done_jobs:
                 job_path = os.path.join(DONE_DIR, job)
@@ -381,6 +389,9 @@ class Commander(object):
     def __fill_hosts(self, counts, sources, workgroup_name, jobs_per_host):
         while True:
             lowest_host = self.__lowest_host(counts)
+            if not lowest_host:
+                self.__logger.debug("No lowest host for %s" % workgroup_name)
+                break  # No host to send work
             if counts[lowest_host] >= jobs_per_host:
                 self.__logger.debug("All %s hosts are full" % workgroup_name)
                 break  # everyone is full
@@ -493,8 +504,12 @@ class Commander(object):
         else:
             config_section = self.__config_section
         self.__logger.info('Reading configuration section: "%s"' % config_section)
-        nmap_hosts = config.get(config_section, NMAP_HOSTS).split(",")
-        nessus_hosts = config.get(config_section, NESSUS_HOSTS).split(",")
+        nmap_hosts = [
+            i.strip() for i in config.get(config_section, NMAP_HOSTS).split(",")
+        ]
+        nessus_hosts = [
+            i.strip() for i in config.get(config_section, NESSUS_HOSTS).split(",")
+        ]
         # clean up empty lists from config
         if nmap_hosts == [""]:
             nmap_hosts = None
@@ -528,7 +543,7 @@ class Commander(object):
         self.__setup_sinks()
 
         # Set up connection Groups
-        connection_config = Config(
+        connection_config = FabricConfig(
             {
                 "timeouts": {"command": FABRIC_COMMAND_TIMEOUT},
                 "load_ssh_configs": FABRIC_USE_SSH_CONFIG,
@@ -540,10 +555,10 @@ class Commander(object):
 
         # pairs of hosts and job sources
         work_groups = (
-            (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
+            (NMAP_WORKGROUP, nmap_connections, self.__nmap_sources, jobs_per_nmap_host),
             (
                 NESSUS_WORKGROUP,
-                nessus_hosts,
+                nessus_connections,
                 self.__nessus_sources,
                 jobs_per_nessus_host,
             ),
