@@ -274,7 +274,7 @@ class Commander(object):
                         "%s is ready for pickup on %s" % (job, connection.host)
                     )
                     done_path = os.path.join(job_path, DONE_FILE)
-                    exit_code = connection.run("cat %s" % done_path).exited
+                    exit_code = int(connection.run("cat %s" % done_path).stdout.trim())
                     if exit_code == 0:
                         dest_dir = SUCCESS_DIR
                     else:
@@ -284,7 +284,13 @@ class Commander(object):
                         )
 
                     try:
-                        result = connection.get(job_path, dest_dir)
+                        # We don't want to try and get '.' or '..'
+                        file_list = job_contents[2:]
+                        for file_path in file_list:
+                            connection.get(
+                                os.path.join(job_path, file_path),
+                                os.path.join(dest_dir, file_path),
+                            )
                         self.__logger.info(
                             "%s was copied successfully from %s to %s"
                             % (job, connection.host, dest_dir)
@@ -323,12 +329,18 @@ class Commander(object):
 
     def __push_job(self, connection, job_path):
         try:
-            paths = connection.put(job_path, RUNNING_DIR)
+            job_name = os.path.basename(job_path)
+            remote_path = os.path.join(RUNNING_DIR, job_name)
+            connection.run("mkdir -p %s" % remote_path)
+            for file_path in os.listdir(job_path):
+                connection.put(
+                    os.path.join(job_path, file_path),
+                    os.path.join(remote_path, file_path),
+                )
             self.__logger.info(
                 "%s was pushed successfully to %s" % (job_path, connection.host)
             )
-            job_name = os.path.basename(job_path)
-            connection.run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
+            connection.run("touch %s" % os.path.join(remote_path, READY_FILE))
             self.__move_to_pushed(job_path)
         except Exception:
             self.__logger.error(
