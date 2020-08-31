@@ -267,14 +267,14 @@ class Commander(object):
             done_jobs = result.stdout.split()
             for job in done_jobs:
                 job_path = os.path.join(DONE_DIR, job)
-                output = connection.run("ls -a %s" % (job_path)).stdout
-                job_contents = output.split()
+                output = connection.run("ls -a %s" % (job_path))
+                job_contents = output.stdout.split()
                 if DONE_FILE in job_contents:
                     self.__logger.info(
                         "%s is ready for pickup on %s" % (job, connection.host)
                     )
                     done_path = os.path.join(job_path, DONE_FILE)
-                    exit_code = int(connection.run("cat %s" % done_path).stdout.trim())
+                    exit_code = int(connection.run("cat %s" % done_path).stdout)
                     if exit_code == 0:
                         dest_dir = SUCCESS_DIR
                     else:
