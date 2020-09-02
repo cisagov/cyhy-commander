@@ -244,7 +244,7 @@ class Commander(object):
         if hosts:
             connection_group = Group(*hosts, config=connection_config)
         else:
-            connect_group = Group(config=connection_config)
+            connection_group = Group(config=connection_config)
 
         for connection in connection_group:
             # We need to manually open the connection to populate
@@ -283,13 +283,16 @@ class Commander(object):
                             "%s had a non-zero exit code: %d" % (job, exit_code)
                         )
 
+                    local_dir = os.path.join(dest_dir, job)
+                    os.mkdir(local_dir)
+
                     try:
                         # We don't want to try and get '.' or '..'
                         file_list = job_contents[2:]
                         for file_path in file_list:
                             connection.get(
                                 os.path.join(job_path, file_path),
-                                os.path.join(dest_dir, file_path),
+                                os.path.join(local_dir, file_path),
                             )
                         self.__logger.info(
                             "%s was copied successfully from %s to %s"
@@ -321,7 +324,7 @@ class Commander(object):
     def __running_job_count(self, connections):
         counts = {}
         results = self.__get_job_list(connections, RUNNING_DIR)
-        for connection, result in results:
+        for connection, result in results.items():
             running_jobs = result.stdout.split()
             count = len(running_jobs)
             counts[connection] = count
