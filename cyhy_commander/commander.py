@@ -298,6 +298,7 @@ class Commander(object):
                             "%s was copied successfully from %s to %s"
                             % (job, connection.host, dest_dir)
                         )
+
                         # remove remote dir
                         result = connection.run("rm -rf %s" % job_path)
                         if result.exited == 0:
@@ -306,9 +307,11 @@ class Commander(object):
                             )
                     except Exception:
                         self.__logger.error(
-                            "Error retriving %s from host %s"
+                            "Error retrieving %s from host %s"
                             % (job_path, connection.host)
                         )
+                        shutil.rmtree(local_dir)
+
                     local_job_path = os.path.join(dest_dir, job)
 
                     if dest_dir == SUCCESS_DIR:
