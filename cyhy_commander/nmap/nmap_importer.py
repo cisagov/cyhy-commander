@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # built-in python libraries
+import logging
 from xml.sax import parse
 
 # third-party libraries (install with pip)
@@ -50,6 +51,7 @@ class NmapImporter(object):
     SOURCE = "nmap"
 
     def __init__(self, db, stage=STAGE.PORTSCAN):
+        self.__logger = logging.getLogger(__name__)
         if stage in (STAGE.NETSCAN1, STAGE.NETSCAN2):
             self.handler = NmapContentHander(
                 self.__netscan_host_callback, self.__end_callback
