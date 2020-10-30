@@ -288,7 +288,7 @@ class Commander(object):
 
                     try:
                         # We don't want to try and get '.' or '..'
-                        file_list = job_contents[2:]
+                        file_list = [f for f in job_contents if f != "." and f != ".."]
                         for file_path in file_list:
                             connection.get(
                                 os.path.join(job_path, file_path),
