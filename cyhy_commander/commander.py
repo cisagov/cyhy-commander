@@ -76,7 +76,7 @@ jobsDir = os.path.join(myDir, "jobs")
 NETSCAN1_JOB_FILE = os.path.join(jobsDir, "netscan1.sh")
 NETSCAN2_JOB_FILE = os.path.join(jobsDir, "netscan2.sh")
 PORTSCAN_JOB_FILE = os.path.join(jobsDir, "portscan.sh")
-VULNSCAN_JOB_FILE = os.path.join(jobsDir, "nessus6.py")
+VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
 SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep.py")
 
