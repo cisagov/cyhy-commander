@@ -98,6 +98,10 @@ class NessusImporter(object):
         self.__try_to_clear_latest_flags()
 
     def port_range_callback(self, port_range_string):
+        # The base policy port range was used
+        if port_range_string == "default":
+            # Match the base policy value found in /extras/policy.xml
+            port_range_string = "1-65535"
         ports = set(util.range_string_to_list(port_range_string))
         self.__logger.debug("Found %d ports in Nessus file" % len(ports))
         self.ticket_manager.ports = ports
