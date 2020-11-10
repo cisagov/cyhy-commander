@@ -93,9 +93,7 @@ class NessusController:
 
         while num_retries < FAILED_REQUEST_MAX_RETRIES:
             if num_retries > 0:
-                LOGGER.warning(
-                    "Waiting {!r} seconds...".format(FAILED_REQUEST_RETRY_WAIT_SEC)
-                )
+                LOGGER.warning("Waiting %d seconds...", FAILED_REQUEST_RETRY_WAIT_SEC)
                 time.sleep(FAILED_REQUEST_RETRY_WAIT_SEC)
 
             headers = {
@@ -142,18 +140,18 @@ class NessusController:
                 return response
 
             LOGGER.warning(
-                "Request failed ({!r} {!r}, attempt #{!r}); response={!r}".format(
-                    method, self.url + target, num_retries + 1, response.text
-                )
+                "Request failed (%s %s, attempt #%d); response=%s",
+                method,
+                self.url + target,
+                num_retries + 1,
+                response.text,
             )
             if self.token and response.status_code == INVALID_CREDS_STATUS:
                 LOGGER.warning(
                     "Invalid credentials error; Nessus session probably expired."
                 )
                 LOGGER.warning(
-                    "Attempting to establish new Nessus session (username: {!r})".format(
-                        USER
-                    )
+                    "Attempting to establish new Nessus session (username: %s)", USER
                 )
                 self.token = None  # Clear token to force re-login on next loop
                 # Don't increment num_retries here; upcoming re-login request will have it's own num_retries counter
@@ -255,9 +253,7 @@ class NessusController:
                 "Scan id {!r} not found; response={!r}".format(scan_id, response.text)
             )
 
-        raise Warning(
-            "Get scan details failed; response={!r}".format(response.text)
-        )
+        raise Warning("Get scan details failed; response={!r}".format(response.text))
 
     def scan_status(self, scan_id):
         scan_details = self.scan_details(scan_id)
@@ -321,7 +317,7 @@ def main():
         error_exit("No target file names matched: {!s}".format(TARGET_FILE_GLOB))
     # pick the first one
     targets_file = possible_targets_files[0]
-    LOGGER.info("Using target file: {!s}".format(targets_file))
+    LOGGER.info("Using target file: %s", targets_file)
     job_root_name = targets_file.rsplit(".", 1)[0]
 
     # find ports file
@@ -331,7 +327,7 @@ def main():
         error_exit("No ports file names matched: {!s}".format(PORTS_FILE_GLOB))
     # pick the first one
     ports_file = possible_ports_file[0]
-    LOGGER.info("Using ports file: {!s}".format(ports_file))
+    LOGGER.info("Using ports file: %s", ports_file)
 
     # read in targets and ports
     with open(targets_file, "r") as f:
@@ -340,17 +336,17 @@ def main():
     with open(ports_file, "r") as f:
         ports = f.readline().strip()
 
-    LOGGER.info("Instantiating Nessus controller at: {!s}".format(URL))
+    LOGGER.info("Instantiating Nessus controller at: %s", URL)
     controller = NessusController(URL)
 
     # Find the base policy by name
-    LOGGER.info("Searching for base policy: {!r}".format(BASE_POLICY_NAME))
+    LOGGER.info("Searching for base policy: %s", BASE_POLICY_NAME)
     base_policy = controller.find_policy(BASE_POLICY_NAME)
     if base_policy is None:
         error_exit("Could not find policy {!r}".format(BASE_POLICY_NAME))
 
     # get base policy details
-    LOGGER.info("Getting details for '{name}' policy".format(**base_policy))
+    LOGGER.info("Getting details for '%s' policy", base_policy["name"])
     base_policy_details = controller.policy_details(base_policy["id"])
 
     # copy details of base policy into new policy and modify them
@@ -372,13 +368,15 @@ def main():
         )
     new_policy_id = new_policy["policy_id"]
     LOGGER.info(
-        "Created new policy: '{policy_name}' (id: {policy_id})".format(**new_policy)
+        "Created new policy: '%s' (id: %s)",
+        new_policy["policy_name"],
+        new_policy["policy_id"],
     )
 
     # create a scan with our new policy
     targets_string = ",".join(targets)
     new_scan_name = job_root_name + " Scan"
-    LOGGER.info("Creating new scan: {!r}".format(new_scan_name))
+    LOGGER.info("Creating new scan: %s", new_scan_name)
     new_scan = controller.scan_new(
         targets_string, new_policy_id, new_scan_name, new_policy_details["uuid"]
     )
@@ -386,28 +384,26 @@ def main():
         error_exit("New scan was not created")
     new_scan_id = new_scan["scan"]["id"]
     LOGGER.info(
-        "Scan successfully created.  Name: '{name}'  id: {id}  UUID: {uuid}".format(
-            **new_scan["scan"]
-        )
+        "Scan successfully created.  Name: '%s'  id: %s  UUID: %s",
+        new_scan["scan"]["name"],
+        new_scan["scan"]["id"],
+        new_scan["scan"]["uuid"],
     )
 
     # launch our new scan
-    LOGGER.info("Launching scan: {!r}".format(new_scan_name))
+    LOGGER.info("Launching scan: %s", new_scan_name)
     scan_launch_response = controller.scan_launch(new_scan_id)
     if not scan_launch_response.get("scan_uuid"):
         error_exit("New scan was not launched")
     LOGGER.info(
-        'Scan launched successfully.  scan_uuid: "{scan_uuid}"'.format(
-            **scan_launch_response
-        )
+        'Scan launched successfully.  scan_uuid: "%s"',
+        scan_launch_response["scan_uuid"],
     )
 
     # wait for the scan to complete
     scan_status = controller.scan_status(new_scan_id)
     while scan_status in [SCAN_RUNNING_STATUS, SCAN_PROCESSING_STATUS]:
-        LOGGER.info(
-            "Waiting for scan to complete (current status: {})".format(scan_status)
-        )
+        LOGGER.info("Waiting for scan to complete (current status: %s)", scan_status)
         scan_found = True
         time.sleep(WAIT_TIME_SEC)
         scan_status = controller.scan_status(new_scan_id)
@@ -433,14 +429,14 @@ def main():
     print(report)
 
     # delete scan
-    LOGGER.info("Deleting scan id: {!r}".format(new_scan_id))
+    LOGGER.info("Deleting scan id: %s", new_scan_id)
     result = controller.scan_delete(new_scan_id)
     if not result:
         error_exit("No result returned when deleting scan")
     LOGGER.info("Scan deleted successfully")
 
     # delete policy
-    LOGGER.info("Deleting policy id: {!r}".format(new_policy_id))
+    LOGGER.info("Deleting policy id: %s", new_policy_id)
     result = controller.policy_delete(new_policy_id)
     if not result:
         error_exit("No result returned when deleting policy")
