@@ -100,7 +100,8 @@ class NessusController:
                 "Content-Type": "application/json; charset=UTF-8"
             }  # Send everything as json content
 
-            # If we aren't logged in (don't have a session token) and we aren't already attempting to login, then try to login
+            # If we aren't logged in (don't have a session token) and we aren't
+            # already attempting to login, then try to login
             if self.token is None and target != LOGIN:
                 LOGGER.info("Attempting to login to Nessus server")
                 self.__make_request(
@@ -154,7 +155,8 @@ class NessusController:
                     "Attempting to establish new Nessus session (username: %s)", USER
                 )
                 self.token = None  # Clear token to force re-login on next loop
-                # Don't increment num_retries here; upcoming re-login request will have it's own num_retries counter
+                # Don't increment num_retries here; upcoming re-login request
+                # will have it's own num_retries counter
             else:
                 num_retries += 1
 
