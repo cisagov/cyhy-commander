@@ -110,7 +110,7 @@ class NessusController:
 
             # If we are already logged in, add the token to the headers
             if self.token:
-                headers["X-Cookie"] = "token={!s}".format(self.token)
+                headers["X-Cookie"] = f"token={self.token}"
 
             if method == "GET":
                 response = requests.get(
@@ -181,7 +181,7 @@ class NessusController:
         if response.status_code == OK_STATUS and response.json().get("policies"):
             return response.json()
 
-        raise Warning("Policy list failed; response={!r}".format(response.text))
+        raise Warning(f"Policy list failed; response={response.text}")
 
     def policy_details(self, policy_id):
         response = self.__make_request(
@@ -190,21 +190,21 @@ class NessusController:
         if response.status_code == OK_STATUS and response.json().get("uuid"):
             return response.json()
 
-        raise Warning("Get policy details failed; response={!r}".format(response.text))
+        raise Warning(f"Get policy details failed; response={response.text}")
 
     def policy_create(self, policy_details):
         response = self.__make_request(POLICY_BASE, "POST", policy_details)
         if response.status_code == OK_STATUS and response.json().get("policy_id"):
             return response.json()
 
-        raise Warning("Policy creation failed; response={!r}".format(response.text))
+        raise Warning(f"Policy creation failed; response={response.text}")
 
     def policy_copy(self, policy_id):
         response = self.__make_request(POLICY_COPY.format(policy_id=policy_id), "POST")
         if response.status_code == OK_STATUS and response.json().get("id"):
             return response.json()
 
-        raise Warning("Policy copy failed; response={!r}".format(response.text))
+        raise Warning(f"Policy copy failed; response={response.text}")
 
     def policy_edit(self, policy_id, policy_details):
         response = self.__make_request(
@@ -213,7 +213,7 @@ class NessusController:
         if response.status_code == OK_STATUS:
             return response
 
-        raise Warning("Policy edit failed; response={!r}".format(response.text))
+        raise Warning(f"Policy edit failed; response={response.text}")
 
     def policy_delete(self, policy_id):
         response = self.__make_request(
@@ -222,7 +222,7 @@ class NessusController:
         if response.status_code == OK_STATUS:
             return response
 
-        raise Warning("Policy delete failed; response={!r}".format(response.text))
+        raise Warning(f"Policy delete failed; response={response.text}")
 
     def scan_new(self, targets, policy_id, scan_name, template_uuid):
         scan_details = dict()
@@ -236,14 +236,14 @@ class NessusController:
         if response.status_code == OK_STATUS and response.json().get("scan"):
             return response.json()
 
-        raise Warning("Scan creation failed; response={!r}".format(response.text))
+        raise Warning(f"Scan creation failed; response={response.text}")
 
     def scan_launch(self, scan_id):
         response = self.__make_request(SCAN_LAUNCH.format(scan_id=scan_id), "POST")
         if response.status_code == OK_STATUS and response.json().get("scan_uuid"):
             return response.json()
 
-        raise Warning("Scan launch failed; response={!r}".format(response.text))
+        raise Warning(f"Scan launch failed; response={response.text}")
 
     def scan_details(self, scan_id):
         response = self.__make_request(SCAN_DETAILS.format(scan_id=scan_id), "GET")
@@ -252,10 +252,10 @@ class NessusController:
 
         if response.status_code == NOT_FOUND_STATUS:
             raise Warning(
-                "Scan id {!r} not found; response={!r}".format(scan_id, response.text)
+                f"Scan id {scan_id} not found; response={response.text}"
             )
 
-        raise Warning("Get scan details failed; response={!r}".format(response.text))
+        raise Warning(f"Get scan details failed; response={response.text}")
 
     def scan_status(self, scan_id):
         scan_details = self.scan_details(scan_id)
@@ -266,7 +266,7 @@ class NessusController:
         if response.status_code == OK_STATUS:
             return response
 
-        raise Warning("Scan delete failed; response={!r}".format(response.text))
+        raise Warning(f"Scan delete failed; response={response.text}")
 
     def report_ready(self, scan_id, file_id):
         response = self.__make_request(
@@ -275,7 +275,7 @@ class NessusController:
         if response.status_code == OK_STATUS and response.json().get("status"):
             return response.json().get("status") == REPORT_READY_STATUS
 
-        raise Warning("Unable to retrieve report: response={!r}".format(response.text))
+        raise Warning(f"Unable to retrieve report: response={response.text}")
 
     def report_download(self, scan_id):
         response = self.__make_request(
@@ -295,17 +295,17 @@ class NessusController:
                 return response.text
 
             raise Warning(
-                "Scan report download failed; response={!r}".format(response.text)
+                f"Scan report download failed; response={response.text}"
             )
 
-        raise Warning("Scan report export failed; response={!r}".format(response.text))
+        raise Warning(f"Scan report export failed; response={response.text}")
 
     def destroy_session(self):
         response = self.__make_request(LOGIN, "DELETE")
         if response.status_code == OK_STATUS:
             return response
 
-        raise Warning("Session destruction failed; response={!r}".format(response.text))
+        raise Warning(f"Session destruction failed; response={response.text}")
 
 
 def main():
@@ -316,7 +316,7 @@ def main():
     LOGGER.info("Searching for targets file")
     possible_targets_files = glob.glob(TARGET_FILE_GLOB)
     if not possible_targets_files:
-        error_exit("No target file names matched: {!s}".format(TARGET_FILE_GLOB))
+        error_exit(f"No target file names matched: {TARGET_FILE_GLOB}")
     # pick the first one
     targets_file = possible_targets_files[0]
     LOGGER.info("Using target file: %s", targets_file)
@@ -326,7 +326,7 @@ def main():
     LOGGER.info("Searching for ports file")
     possible_ports_file = glob.glob(PORTS_FILE_GLOB)
     if not possible_ports_file:
-        error_exit("No ports file names matched: {!s}".format(PORTS_FILE_GLOB))
+        error_exit(f"No ports file names matched: {PORTS_FILE_GLOB}")
     # pick the first one
     ports_file = possible_ports_file[0]
     LOGGER.info("Using ports file: %s", ports_file)
@@ -345,7 +345,7 @@ def main():
     LOGGER.info("Searching for base policy: %s", BASE_POLICY_NAME)
     base_policy = controller.find_policy(BASE_POLICY_NAME)
     if base_policy is None:
-        error_exit("Could not find policy {!r}".format(BASE_POLICY_NAME))
+        error_exit(f"Could not find policy {BASE_POLICY_NAME}")
 
     # get base policy details
     LOGGER.info("Getting details for '%s' policy", base_policy["name"])
@@ -364,9 +364,7 @@ def main():
         error_exit("No new policy id returned")
     if new_policy["policy_id"] == base_policy["id"]:
         error_exit(
-            "New policy has the same id as the source policy: {policy_id}".format(
-                **new_policy
-            )
+            f"New policy has the same id as the source policy: {new_policy['policy_id']}"
         )
     new_policy_id = new_policy["policy_id"]
     LOGGER.info(
@@ -410,23 +408,21 @@ def main():
         time.sleep(WAIT_TIME_SEC)
         scan_status = controller.scan_status(new_scan_id)
     if not scan_found:
-        error_exit("Scan was never seen. id: {!r}".format(new_scan_id))
+        error_exit(f"Scan was never seen. id: {new_scan_id}")
 
     scan_details_response = controller.scan_details(new_scan_id)
     if scan_details_response["info"].get("status") == SCAN_COMPLETED_STATUS:
         LOGGER.info("Scan completed")
     else:
         raise Warning(
-            "Scan id {!r} stopped running with status {!r}".format(
-                new_scan_id, scan_details_response["info"].get("status")
-            )
+            f"Scan id {new_scan_id} stopped running with status {scan_details_response['info'].get('status')}"
         )
 
     # download report and send to stdout
     LOGGER.info("Downloading report")
     report = controller.report_download(new_scan_id)
     if not report:
-        error_exit("Downloaded report was empty for scan id: {!r}".format(new_scan_id))
+        error_exit(f"Downloaded report was empty for scan id: {new_scan_id}")
     LOGGER.info("Report downloaded successfully")
     print(report)
 
