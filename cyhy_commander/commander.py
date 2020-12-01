@@ -515,13 +515,21 @@ class Commander(object):
         else:
             config_section = self.__config_section
         self.__logger.info('Reading configuration section: "%s"' % config_section)
+
         nmap_hosts = config.get(config_section, NMAP_HOSTS).split(",")
         nessus_hosts = config.get(config_section, NESSUS_HOSTS).split(",")
+        # remove any duplicates
+        nmap_hosts = list(set(nmap_hosts))
+        nessus_hosts = list(set(nessus_hosts))
+        # clean up the host lists and sort them
+        nmap_hosts = sorted([h.strip() for h in nmap_hosts if h])
+        nessus_hosts = sorted([h.strip() for h in nessus_hosts if h])
         # clean up empty lists from config
-        if nmap_hosts == [""]:
+        if not nmap_hosts:
             nmap_hosts = None
-        if nessus_hosts == [""]:
+        if not nessus_hosts:
             nessus_hosts = None
+
         self.__logger.info("nmap hosts: %s" % nmap_hosts)
         self.__logger.info("nessus hosts: %s" % nessus_hosts)
         jobs_per_nmap_host = config.getint(config_section, JOBS_PER_NMAP_HOST)
@@ -571,9 +579,9 @@ class Commander(object):
                 self.__logger.debug("Checking for hosts to bring off of cooldown")
                 # we don't want to modify the list while we are iterating, so we
                 # iterate through a copy and modify the original
-                for (host_info, index) in enumerate(list(self.__hosts_on_cooldown)):
+                for (index, host_info) in enumerate(list(self.__hosts_on_cooldown)):
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_TIME
-                    self.__logger.info(
+                    self.__logger.debug(
                         "Host '%s' is out of rotation until %s"
                         % (
                             host_info["host"],
@@ -583,8 +591,7 @@ class Commander(object):
                             ),
                         )
                     )
-                    if cooldown_end >= time.time():
-                        self.__host_exceptions[host_info["host"]] = 0
+                    if time.time() >= cooldown_end:
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
                             work_groups[group][1].sort()
@@ -599,7 +606,7 @@ class Commander(object):
                 for (host, count) in self.__host_exceptions.items():
                     if count >= EXCEPTION_THRESHOLD:
                         groups = []
-                        for (group, index) in enumerate(work_groups):
+                        for (index, group) in enumerate(work_groups):
                             if host in group[1]:
                                 groups.append(index)
                                 group[1].remove(host)
@@ -610,6 +617,7 @@ class Commander(object):
                             "work_groups": groups,
                         }
                         self.__hosts_on_cooldown.append(info_dict)
+                        self.__host_exceptions[host] = 0
                         self.__logger.debug(
                             "Host '%s' has been removed from rotation" % host
                         )
