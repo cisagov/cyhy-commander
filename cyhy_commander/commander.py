@@ -22,31 +22,31 @@ Options:
 # python-daemon
 
 from collections import defaultdict
+import logging
 import os
-import sys
-import shutil
-import time
-import lockfile
 import random
+import shutil
 import signal
+import sys
+import time
 import traceback
 from ConfigParser import SafeConfigParser
-import logging
 
+import daemon
+from docopt import docopt
+import lockfile
+from fabric import operations
+from fabric.api import task, run, env
 from fabric.network import disconnect_all, normalize
 from fabric.state import connections
 from fabric.tasks import Task, execute
-from fabric.api import task, run, env
-from fabric import operations
-import daemon
-from docopt import docopt
 
-from cyhy.db import CHDatabase
 from cyhy.core import *
-from job_source import DirectoryJobSource, DatabaseJobSource
-from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
-from cyhy.db import database
+from cyhy.db import CHDatabase, database
 from cyhy.util import setup_logging
+
+from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
+from job_source import DirectoryJobSource, DatabaseJobSource
 
 # fabric configuration
 env.use_ssh_config = True
@@ -116,11 +116,13 @@ NESSUS_WORKGROUP = "nessus"
 # A host on cooldown is removed from any work group lists it is on for the
 # duration of its cooldown period. This means that the existing connection is
 # closed, and no attempts are made to interact with the host until the below
-# COOLDOWN_TIME duration has expired. Once it has, the host is restored to the
+# cooldown duration has expired. Once it has, the host is restored to the
 # list(s) it was removed from and normal operations for that host continue.
 EXCEPTION_THRESHOLD = 3
-# how long should a host be on cooldown (in minutes)
-COOLDOWN_TIME = 60 * 30
+# how long should a host be on cooldown
+# This value is in seconds, but it is set up to use minutes for granularity. The
+# second value should be changed to modify the cooldown duration.
+COOLDOWN_DURATION = 60 * 30
 
 
 class Commander(object):
@@ -586,7 +588,7 @@ class Commander(object):
                 # we don't want to modify the list while we are iterating, so we
                 # iterate through a copy and modify the original
                 for (index, host_info) in enumerate(list(self.__hosts_on_cooldown)):
-                    cooldown_end = host_info["cooldown_start"] + COOLDOWN_TIME
+                    cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
@@ -609,7 +611,7 @@ class Commander(object):
                         )
 
                 # check for hosts that have had multiple exceptions
-                self.__logger.debug("Checking for hosts with too many failures")
+                self.__logger.debug("Checking for hosts with too many exceptions")
                 for (host, count) in self.__host_exceptions.items():
                     if count >= EXCEPTION_THRESHOLD:
                         groups = []
