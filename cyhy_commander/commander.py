@@ -112,7 +112,12 @@ RANDOMIZE_SOURCES = True
 NMAP_WORKGROUP = "nmap"
 NESSUS_WORKGROUP = "nessus"
 
-# minimum number of exceptions before putting a host on cooldown
+# minimum number of exceptions before putting a host on "cooldown"
+# A host on cooldown is removed from any work group lists it is on for the
+# duration of its cooldown period. This means that the existing connection is
+# closed, and no attempts are made to interact with the host until the below
+# COOLDOWN_TIME duration has expired. Once it has, the host is restored to the
+# list(s) it was removed from and normal operations for that host continue.
 EXCEPTION_THRESHOLD = 3
 # how long should a host be on cooldown (in minutes)
 COOLDOWN_TIME = 60 * 30
