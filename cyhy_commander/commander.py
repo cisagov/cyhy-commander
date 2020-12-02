@@ -615,7 +615,7 @@ class Commander(object):
                 # check for hosts that have had multiple exceptions
                 self.__logger.debug("Checking for hosts with too many exceptions")
                 for (host, count) in self.__host_exceptions.items():
-                    if count >= NUM_EXCEPTIONS_ALLOWED:
+                    if count > NUM_EXCEPTIONS_ALLOWED:
                         groups = []
                         for (index, group) in enumerate(work_groups):
                             if host in group[1]:
