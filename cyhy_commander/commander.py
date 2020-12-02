@@ -21,30 +21,32 @@ Options:
 # fabric
 # python-daemon
 
+from collections import defaultdict
+import logging
 import os
-import sys
-import shutil
-import time
-import lockfile
 import random
+import shutil
 import signal
+import sys
+import time
 import traceback
 from ConfigParser import SafeConfigParser
-import logging
 
-from fabric.network import disconnect_all
-from fabric.tasks import Task, execute
-from fabric.api import task, run, env
-from fabric import operations
 import daemon
 from docopt import docopt
+import lockfile
+from fabric import operations
+from fabric.api import task, run, env
+from fabric.network import disconnect_all, normalize
+from fabric.state import connections
+from fabric.tasks import Task, execute
 
-from cyhy.db import CHDatabase
 from cyhy.core import *
-from job_source import DirectoryJobSource, DatabaseJobSource
-from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
-from cyhy.db import database
+from cyhy.db import CHDatabase, database
 from cyhy.util import setup_logging
+
+from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
+from job_source import DirectoryJobSource, DatabaseJobSource
 
 # fabric configuration
 env.use_ssh_config = True
@@ -110,6 +112,20 @@ RANDOMIZE_SOURCES = True
 NMAP_WORKGROUP = "nmap"
 NESSUS_WORKGROUP = "nessus"
 
+# The number of exceptions to allow before putting a host on "cooldown".
+#
+# A host on cooldown is removed from any work group lists it is on for the
+# duration of its cooldown period. This means that the existing connection is
+# closed, and no attempts are made to interact with the host until the below
+# cooldown duration has expired. Once it has, the host is restored to the
+# list(s) it was removed from and normal operations for that host continue.
+NUM_EXCEPTIONS_ALLOWED = 2
+# How long should a host remain on cooldown
+#
+# This value is in seconds, but it is set up to use minutes for granularity. The
+# second value should be changed to modify the cooldown duration.
+COOLDOWN_DURATION = 60 * 30
+
 
 class Commander(object):
     def __init__(self, config_section=None, debug_logging=False, console_logging=False):
@@ -124,6 +140,8 @@ class Commander(object):
         self.__nessus_sources = []
         self.__success_sinks = []
         self.__failure_sinks = []
+        self.__host_exceptions = defaultdict(lambda: 0)
+        self.__hosts_on_cooldown = []
         self.__db = None
         self.__test_mode = False
         self.__keep_failures = False
@@ -296,6 +314,7 @@ class Commander(object):
                 "Exception when retrieving done jobs from %s" % env.host_string
             )
             self.__logger.error(e)
+            self.__host_exceptions[env.host_string] += 1
 
     @task
     def __running_job_count(self):
@@ -315,6 +334,7 @@ class Commander(object):
                 "Exception when retrieving running job count from %s" % env.host_string
             )
             self.__logger.error(e)
+            self.__host_exceptions[env.host_string] += 1
 
     @task
     def __push_job(self, job_path):
@@ -336,6 +356,7 @@ class Commander(object):
                 "Exception when pushing %s to host %s" % (job_path, env.host_sring)
             )
             self.__logger.error(e)
+            self.__host_exceptions[env.host_string] += 1
 
     def __unique_filename(self, path):
         if not os.path.exists(path):
@@ -504,13 +525,21 @@ class Commander(object):
         else:
             config_section = self.__config_section
         self.__logger.info('Reading configuration section: "%s"' % config_section)
+
         nmap_hosts = config.get(config_section, NMAP_HOSTS).split(",")
         nessus_hosts = config.get(config_section, NESSUS_HOSTS).split(",")
+        # remove any duplicates
+        nmap_hosts = list(set(nmap_hosts))
+        nessus_hosts = list(set(nessus_hosts))
+        # clean up the host lists and sort them
+        nmap_hosts = sorted([h.strip() for h in nmap_hosts if h])
+        nessus_hosts = sorted([h.strip() for h in nessus_hosts if h])
         # clean up empty lists from config
-        if nmap_hosts == [""]:
+        if not nmap_hosts:
             nmap_hosts = None
-        if nessus_hosts == [""]:
+        if not nessus_hosts:
             nessus_hosts = None
+
         self.__logger.info("nmap hosts: %s" % nmap_hosts)
         self.__logger.info("nessus hosts: %s" % nessus_hosts)
         jobs_per_nmap_host = config.getint(config_section, JOBS_PER_NMAP_HOST)
@@ -555,6 +584,59 @@ class Commander(object):
                 # record time at start of duty cycle
                 cycle_start_time = time.time()
                 next_cycle_start_time = cycle_start_time + self.__poll_interval
+
+                # check for hosts that are coming off of cooldown
+                self.__logger.debug("Checking for hosts to bring off of cooldown")
+                # we don't want to modify the list while we are iterating, so we
+                # iterate through a copy and modify the original
+                for (index, host_info) in enumerate(list(self.__hosts_on_cooldown)):
+                    cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
+                    if time.time() >= cooldown_end:
+                        for group in host_info["work_groups"]:
+                            work_groups[group][1].append(host_info["host"])
+                            work_groups[group][1].sort()
+                        self.__hosts_on_cooldown.pop(index)
+                        self.__logger.debug(
+                            "Host '%s' has been put back into rotation"
+                            % host_info["host"]
+                        )
+                    else:
+                        self.__logger.debug(
+                            "Host '%s' is out of rotation until %s"
+                            % (
+                                host_info["host"],
+                                # output an ISO 8601 human readable time
+                                time.strftime(
+                                    "%Y-%m-%dT%H:%M:%S", time.localtime(cooldown_end)
+                                ),
+                            )
+                        )
+
+                # check for hosts that have had multiple exceptions
+                self.__logger.debug("Checking for hosts with too many exceptions")
+                for (host, count) in self.__host_exceptions.items():
+                    if count > NUM_EXCEPTIONS_ALLOWED:
+                        groups = []
+                        for (index, group) in enumerate(work_groups):
+                            if host in group[1]:
+                                groups.append(index)
+                                group[1].remove(host)
+
+                        info_dict = {
+                            "host": host,
+                            "cooldown_start": time.time(),
+                            "work_groups": groups,
+                        }
+                        self.__hosts_on_cooldown.append(info_dict)
+                        self.__host_exceptions[host] = 0
+                        for cache_key in connections.keys():
+                            cuser, chost, cport = normalize(cache_key)
+                            if chost == host:
+                                connections[cache_key].close()
+                        self.__logger.debug(
+                            "Host '%s' has been removed from rotation" % host
+                        )
+
                 # process anything that has completed
                 self.__logger.debug(
                     "Checking remotes for completed jobs to download and process"
