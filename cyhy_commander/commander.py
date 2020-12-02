@@ -112,14 +112,16 @@ RANDOMIZE_SOURCES = True
 NMAP_WORKGROUP = "nmap"
 NESSUS_WORKGROUP = "nessus"
 
-# minimum number of exceptions before putting a host on "cooldown"
+# The number of exceptions to allow before putting a host on "cooldown".
+#
 # A host on cooldown is removed from any work group lists it is on for the
 # duration of its cooldown period. This means that the existing connection is
 # closed, and no attempts are made to interact with the host until the below
 # cooldown duration has expired. Once it has, the host is restored to the
 # list(s) it was removed from and normal operations for that host continue.
-EXCEPTION_THRESHOLD = 3
-# how long should a host be on cooldown
+NUM_EXCEPTIONS_ALLOWED = 2
+# How long should a host remain on cooldown
+#
 # This value is in seconds, but it is set up to use minutes for granularity. The
 # second value should be changed to modify the cooldown duration.
 COOLDOWN_DURATION = 60 * 30
@@ -613,7 +615,7 @@ class Commander(object):
                 # check for hosts that have had multiple exceptions
                 self.__logger.debug("Checking for hosts with too many exceptions")
                 for (host, count) in self.__host_exceptions.items():
-                    if count >= EXCEPTION_THRESHOLD:
+                    if count >= NUM_EXCEPTIONS_ALLOWED:
                         groups = []
                         for (index, group) in enumerate(work_groups):
                             if host in group[1]:
