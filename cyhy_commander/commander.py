@@ -243,80 +243,99 @@ class Commander(object):
 
     @task
     def __done_jobs(self):
-        output = run("ls %s" % DONE_DIR)
-        if output.failed:
-            self.__logger.warning(
-                'Unable to get listing of "%s" on %s' % (DONE_DIR, env.host_string)
-            )
-            output = ""
-        doneJobs = output.split()
-        for job in doneJobs:
-            jobPath = os.path.join(DONE_DIR, job)
-            output = run("ls -a %s" % (jobPath))
-            jobContents = output.split()
-            if DONE_FILE in jobContents:
-                self.__logger.info(
-                    "%s is ready for pickup on %s" % (job, env.host_string)
-                )
-                donePath = os.path.join(jobPath, DONE_FILE)
-                exitCode = run("cat %s" % donePath)
-                if exitCode == "0":
-                    destDir = SUCCESS_DIR
-                else:
-                    destDir = FAILED_DIR
-                    self.__logger.warning(
-                        "%s had a non-zero exit code: %s" % (job, exitCode)
-                    )
-
-                paths = operations.get(jobPath, destDir)
-                if len(paths.failed) == 0:
-                    self.__logger.info(
-                        "%s was copied successfully from %s to %s"
-                        % (job, env.host_string, destDir)
-                    )
-                    # remove remote dir
-                    run("rm -rf %s" % jobPath)
-                    self.__logger.info(
-                        "%s was removed from %s" % (job, env.host_string)
-                    )
-                local_job_path = os.path.join(destDir, job)
-
-                if destDir == SUCCESS_DIR:
-                    self.__process_successful_job(local_job_path)
-                else:
-                    self.__process_failed_job(local_job_path)
-
-            else:
+        try:
+            output = run("ls %s" % DONE_DIR)
+            if output.failed:
                 self.__logger.warning(
-                    "%s is not ready for pickup on %s" % (job, env.host_string)
+                    'Unable to get listing of "%s" on %s' % (DONE_DIR, env.host_string)
                 )
+                output = ""
+            doneJobs = output.split()
+            for job in doneJobs:
+                jobPath = os.path.join(DONE_DIR, job)
+                output = run("ls -a %s" % (jobPath))
+                jobContents = output.split()
+                if DONE_FILE in jobContents:
+                    self.__logger.info(
+                        "%s is ready for pickup on %s" % (job, env.host_string)
+                    )
+                    donePath = os.path.join(jobPath, DONE_FILE)
+                    exitCode = run("cat %s" % donePath)
+                    if exitCode == "0":
+                        destDir = SUCCESS_DIR
+                    else:
+                        destDir = FAILED_DIR
+                        self.__logger.warning(
+                            "%s had a non-zero exit code: %s" % (job, exitCode)
+                        )
+
+                    paths = operations.get(jobPath, destDir)
+                    if len(paths.failed) == 0:
+                        self.__logger.info(
+                            "%s was copied successfully from %s to %s"
+                            % (job, env.host_string, destDir)
+                        )
+                        # remove remote dir
+                        run("rm -rf %s" % jobPath)
+                        self.__logger.info(
+                            "%s was removed from %s" % (job, env.host_string)
+                        )
+                    local_job_path = os.path.join(destDir, job)
+
+                    if destDir == SUCCESS_DIR:
+                        self.__process_successful_job(local_job_path)
+                    else:
+                        self.__process_failed_job(local_job_path)
+
+                else:
+                    self.__logger.warning(
+                        "%s is not ready for pickup on %s" % (job, env.host_string)
+                    )
+        except Exception as e:
+            self.__logger.error(
+                "Exception when retrieving done jobs from %s" % env.host_string
+            )
+            self.__logger.error(e)
 
     @task
     def __running_job_count(self):
-        output = run("ls %s" % RUNNING_DIR)
-        if output.failed:
-            self.__logger.warning(
-                'Unable to get listing of "%s" on %s' % (RUNNING_DIR, env.host_string)
+        try:
+            output = run("ls %s" % RUNNING_DIR)
+            if output.failed:
+                self.__logger.warning(
+                    'Unable to get listing of "%s" on %s'
+                    % (RUNNING_DIR, env.host_string)
+                )
+                return None
+            runningJobs = output.split()
+            count = len(runningJobs)
+            return count
+        except Exception as e:
+            self.__logger.error(
+                "Exception when retrieving running job count from %s" % env.host_string
             )
-            return None
-        runningJobs = output.split()
-        count = len(runningJobs)
-        return count
+            self.__logger.error(e)
 
     @task
     def __push_job(self, job_path):
-        paths = operations.put(job_path, RUNNING_DIR)
-        if len(paths.failed) == 0:
-            self.__logger.info(
-                "%s was pushed successfully to %s" % (job_path, env.host_string)
-            )
-            job_name = os.path.basename(job_path)
-            run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
-            self.__move_to_pushed(job_path)
-        else:
+        try:
+            paths = operations.put(job_path, RUNNING_DIR)
+            if len(paths.failed) == 0:
+                self.__logger.info(
+                    "%s was pushed successfully to %s" % (job_path, env.host_string)
+                )
+                job_name = os.path.basename(job_path)
+                run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
+                self.__move_to_pushed(job_path)
+            else:
+                self.__logger.error(
+                    "Error pushing %s to host %s" % (job_path, env.host_string)
+                )
+        except Exception as e:
             self.__logger.error(
-                "Error pushing %s to host %s" % (job_path, env.host_string)
+                "Exception when pushing %s to host %s" % (job_path, env.host_sring)
             )
+            self.__logger.error(e)
 
     def __unique_filename(self, path):
         if not os.path.exists(path):
