@@ -33,7 +33,8 @@ import traceback
 from ConfigParser import SafeConfigParser
 import logging
 
-from fabric.network import disconnect_all
+from fabric.network import disconnect_all, normalize
+from fabric.state import connections
 from fabric.tasks import Task, execute
 from fabric.api import task, run, env
 from fabric import operations
@@ -618,6 +619,10 @@ class Commander(object):
                         }
                         self.__hosts_on_cooldown.append(info_dict)
                         self.__host_exceptions[host] = 0
+                        for cache_key in connections.keys():
+                            cuser, chost, cport = normalize(cache_key)
+                            if chost == host:
+                                connections[cache_key].close()
                         self.__logger.debug(
                             "Host '%s' has been removed from rotation" % host
                         )
