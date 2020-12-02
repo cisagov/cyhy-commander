@@ -582,16 +582,6 @@ class Commander(object):
                 # iterate through a copy and modify the original
                 for (index, host_info) in enumerate(list(self.__hosts_on_cooldown)):
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_TIME
-                    self.__logger.debug(
-                        "Host '%s' is out of rotation until %s"
-                        % (
-                            host_info["host"],
-                            # output an ISO 8601 human readable time
-                            time.strftime(
-                                "%Y-%m-%dT%H:%M:%S", time.localtime(cooldown_end)
-                            ),
-                        )
-                    )
                     if time.time() >= cooldown_end:
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
@@ -600,6 +590,17 @@ class Commander(object):
                         self.__logger.debug(
                             "Host '%s' has been put back into rotation"
                             % host_info["host"]
+                        )
+                    else:
+                        self.__logger.debug(
+                            "Host '%s' is out of rotation until %s"
+                            % (
+                                host_info["host"],
+                                # output an ISO 8601 human readable time
+                                time.strftime(
+                                    "%Y-%m-%dT%H:%M:%S", time.localtime(cooldown_end)
+                                ),
+                            )
                         )
 
                 # check for hosts that have had multiple exceptions
