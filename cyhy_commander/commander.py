@@ -588,14 +588,14 @@ class Commander(object):
                 # check for hosts that are coming off of cooldown
                 self.__logger.debug("Checking for hosts to bring off of cooldown")
                 # we don't want to modify the list while we are iterating, so we
-                # iterate through a copy and modify the original
-                for (index, host_info) in enumerate(list(self.__hosts_on_cooldown)):
+                # iterate through a copy and remove from the original
+                for host_info in self.__hosts_on_cooldown[:]:
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
                             work_groups[group][1].sort()
-                        self.__hosts_on_cooldown.pop(index)
+                        self.__hosts_on_cooldown.remove(host_info)
                         self.__logger.debug(
                             "Host '%s' has been put back into rotation"
                             % host_info["host"]
