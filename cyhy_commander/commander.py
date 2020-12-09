@@ -592,12 +592,19 @@ class Commander(object):
                 for host_info in self.__hosts_on_cooldown[:]:
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
+                        try:
+                            # Manually re-connect to the host
+                            for cache_key in host_info["cache_keys"]:
+                                connections.connect(cache_key)
+                        except Exception as e:
+                            self.__logger.error(
+                                "Unable to reconnect to '%s'" % host_info["host"]
+                            )
+                            self.__logger.error(e)
+                            continue
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
                             work_groups[group][1].sort()
-                        # Manually re-connect to the host
-                        for cache_key in host_info["cache_keys"]:
-                            connections.connect(cache_key)
                         self.__hosts_on_cooldown.remove(host_info)
                         self.__logger.debug(
                             "Host '%s' has been put back into rotation"
