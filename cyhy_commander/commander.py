@@ -593,6 +593,8 @@ class Commander(object):
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
                         try:
+                            # Manually set the appropriate environment value
+                            env.host_string = host_info["host"]
                             # Manually re-connect to the host
                             for cache_key in host_info["cache_keys"]:
                                 connections.connect(cache_key)
