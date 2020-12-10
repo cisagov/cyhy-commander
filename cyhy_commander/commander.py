@@ -592,6 +592,18 @@ class Commander(object):
                 for host_info in self.__hosts_on_cooldown[:]:
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
+                        try:
+                            # Manually set the appropriate environment value
+                            env.host_string = host_info["host"]
+                            # Manually re-connect to the host
+                            for cache_key in host_info["cache_keys"]:
+                                connections.connect(cache_key)
+                        except Exception as e:
+                            self.__logger.error(
+                                "Unable to reconnect to '%s'" % host_info["host"]
+                            )
+                            self.__logger.error(e)
+                            continue
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
                             work_groups[group][1].sort()
@@ -627,12 +639,15 @@ class Commander(object):
                             "cooldown_start": time.time(),
                             "work_groups": groups,
                         }
-                        self.__hosts_on_cooldown.append(info_dict)
                         self.__host_exceptions[host] = 0
+                        cache_keys = []
                         for cache_key in connections.keys():
                             cuser, chost, cport = normalize(cache_key)
                             if chost == host:
                                 connections[cache_key].close()
+                                cache_keys.append(cache_key)
+                        info_dict["cache_keys"] = cache_keys
+                        self.__hosts_on_cooldown.append(info_dict)
                         self.__logger.debug(
                             "Host '%s' has been removed from rotation" % host
                         )
