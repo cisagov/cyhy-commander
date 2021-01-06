@@ -512,10 +512,10 @@ class Commander(object):
 
         # process configuration
         if not os.path.exists(CONFIG_FILENAME):
-            print >> sys.stderr, 'Configuration file not found: "%s"' % CONFIG_FILENAME
+            print >>sys.stderr, 'Configuration file not found: "%s"' % CONFIG_FILENAME
             self.__write_config()
-            print >> sys.stderr, "A default configuration file was created in the working directory."
-            print >> sys.stderr, "Please edit and relaunch."
+            print >>sys.stderr, "A default configuration file was created in the working directory."
+            print >>sys.stderr, "Please edit and relaunch."
             self.__logger.error("Configuration file not found. Exiting.")
             sys.exit(-1)
 
@@ -710,12 +710,12 @@ def main():
     args = docopt(__doc__, version="v0.0.1")
     workingDir = os.path.join(os.getcwd(), args["<working-dir>"])
     if not os.path.exists(workingDir):
-        print >> sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % workingDir
+        print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % workingDir
         os.mkdir(workingDir)
     os.chdir(workingDir)
     lock = lockfile.LockFile(os.path.join(workingDir, LOCK_FILENAME), timeout=0)
     if lock.is_locked():
-        print >> sys.stderr, "Cannot start.  There is already a cyhy-commander executing in this working directory."
+        print >>sys.stderr, "Cannot start.  There is already a cyhy-commander executing in this working directory."
         sys.exit(-1)
 
     commander = Commander(args["--section"], args["--debug"], args["--stdout-log"])
