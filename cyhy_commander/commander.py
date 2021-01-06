@@ -353,7 +353,7 @@ class Commander(object):
                 )
         except Exception as e:
             self.__logger.error(
-                "Exception when pushing %s to host %s" % (job_path, env.host_sring)
+                "Exception when pushing %s to host %s" % (job_path, env.host_string)
             )
             self.__logger.error(e)
             self.__host_exceptions[env.host_string] += 1
