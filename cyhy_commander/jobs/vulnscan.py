@@ -401,6 +401,7 @@ def main():
     )
 
     # wait for the scan to complete
+    scan_found = False
     scan_status = controller.scan_status(new_scan_id)
     while scan_status in [SCAN_RUNNING_STATUS, SCAN_PROCESSING_STATUS]:
         LOGGER.info("Waiting for scan to complete (current status: %s)", scan_status)
