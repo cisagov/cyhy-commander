@@ -22,7 +22,7 @@ setup(
         "cyhy-core >= 0.0.2",
         "Fabric >= 1.8.3, < 2.0.0",
         "docopt >= 0.6.2",
-        "python-daemon >= 1.6",
+        "python-daemon == 2.3.0",
         "lockfile >= 0.9.1",
     ],
 )
