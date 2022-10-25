@@ -251,9 +251,7 @@ class NessusController:
             return response.json()
 
         if response.status_code == NOT_FOUND_STATUS:
-            raise Warning(
-                f"Scan id {scan_id} not found; response={response.text}"
-            )
+            raise Warning(f"Scan id {scan_id} not found; response={response.text}")
 
         raise Warning(f"Get scan details failed; response={response.text}")
 
@@ -294,9 +292,7 @@ class NessusController:
             if response.status_code == OK_STATUS:
                 return response.text
 
-            raise Warning(
-                f"Scan report download failed; response={response.text}"
-            )
+            raise Warning(f"Scan report download failed; response={response.text}")
 
         raise Warning(f"Scan report export failed; response={response.text}")
 
