@@ -80,7 +80,7 @@ NETSCAN2_JOB_FILE = os.path.join(jobsDir, "netscan2.sh")
 PORTSCAN_JOB_FILE = os.path.join(jobsDir, "portscan.sh")
 VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
-SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep-py3.py")
+SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep.py")
 
 # config file
 DEFAULT = "DEFAULT"
