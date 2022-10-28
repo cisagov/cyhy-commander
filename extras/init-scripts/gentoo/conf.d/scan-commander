@@ -1,4 +1,0 @@
-# /etc/conf.d/scan-commander
-
-COMMANDER_CMD="/usr/local/bin/scan-commander"
-COMMANDER_HOME="/home/fnsuser/commander"
