@@ -17,7 +17,7 @@ setup(
     },
     # license='LICENSE.txt',
     description="Command and control application for Cyber Hygiene",
-    # long_description=open('README.txt').read(),
+    python_requires="== 2.7.18",
     install_requires=[
         "cyhy-core >= 0.0.2",
         "Fabric >= 1.8.3, < 2.0.0",
