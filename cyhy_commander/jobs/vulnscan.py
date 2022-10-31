@@ -10,11 +10,9 @@ import time
 
 # Third-Party Libraries
 import requests
+import yaml
 
-USER = "cap-scanner"
-PASSWORD = "***REMOVED***"
-URL = "https://localhost:8834"
-BASE_POLICY_NAME = "cyhy-base"
+NESSUS_API_CONFIGURATION_FILE = "/etc/cyhy/nessus_api.yml"
 
 DEBUG = False
 LOGIN = "/session"
@@ -82,8 +80,10 @@ def error_exit(message):
 
 
 class NessusController:
-    def __init__(self, nessus_url):
+    def __init__(self, nessus_url, nessus_username, nessus_password):
         self.url = nessus_url
+        self.username = nessus_username
+        self.password = nessus_password
         self.token = None
 
     def __make_request(self, target, method, payload=None):
@@ -105,7 +105,9 @@ class NessusController:
             if self.token is None and target != LOGIN:
                 LOGGER.info("Attempting to login to Nessus server")
                 self.__make_request(
-                    LOGIN, "POST", {"username": USER, "password": PASSWORD}
+                    LOGIN,
+                    "POST",
+                    {"username": self.username, "password": self.password},
                 )
 
             # If we are already logged in, add the token to the headers
@@ -152,7 +154,8 @@ class NessusController:
                     "Invalid credentials error; Nessus session probably expired."
                 )
                 LOGGER.warning(
-                    "Attempting to establish new Nessus session (username: %s)", USER
+                    "Attempting to establish new Nessus session (username: %s)",
+                    self.username,
                 )
                 self.token = None  # Clear token to force re-login on next loop
                 # Don't increment num_retries here; upcoming re-login request
@@ -308,6 +311,13 @@ def main():
     setup_logging()
     LOGGER.info("Nessus job starting")
 
+    LOGGER.info(
+        "Getting Nessus configuration information from %s",
+        NESSUS_API_CONFIGURATION_FILE,
+    )
+    with open(NESSUS_API_CONFIGURATION_FILE) as configuration_file:
+        api_configuration = yaml.load(configuration_file, Loader=yaml.SafeLoader)
+
     # find targets file
     LOGGER.info("Searching for targets file")
     possible_targets_files = glob.glob(TARGET_FILE_GLOB)
@@ -334,14 +344,25 @@ def main():
     with open(ports_file, "r") as f:
         ports = f.readline().strip()
 
-    LOGGER.info("Instantiating Nessus controller at: %s", URL)
-    controller = NessusController(URL)
+    try:
+        LOGGER.info("Instantiating Nessus controller at: %s", api_configuration["url"])
+        controller = NessusController(
+            api_configuration["url"],
+            api_configuration["credentials"]["username"],
+            api_configuration["credentials"]["password"],
+        )
 
-    # Find the base policy by name
-    LOGGER.info("Searching for base policy: %s", BASE_POLICY_NAME)
-    base_policy = controller.find_policy(BASE_POLICY_NAME)
-    if base_policy is None:
-        error_exit(f"Could not find policy {BASE_POLICY_NAME}")
+        # Find the base policy by name
+        LOGGER.info(
+            "Searching for base policy: %s", api_configuration["policy"]["name"]
+        )
+        base_policy = controller.find_policy(api_configuration["policy"]["name"])
+        if base_policy is None:
+            error_exit(f"Could not find policy {api_configuration['policy']['name']}")
+    except KeyError as err:
+        error_exit(
+            f"Missing required key {str(err)} from Nessus API configuration file"
+        )
 
     # get base policy details
     LOGGER.info("Getting details for '%s' policy", base_policy["name"])
