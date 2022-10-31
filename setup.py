@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 setup(
     name="cyhy-commander",
     version="0.0.2",
-    author="Mark Feldhousen Jr.",
-    author_email="mark.feldhousen@trio.dhs.gov",
+    author="Mark Feldhousen",
+    author_email="mark.feldhousen@cisa.dhs.gov",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
