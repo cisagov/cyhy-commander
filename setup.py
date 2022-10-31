@@ -15,7 +15,7 @@ setup(
             "cyhy-nessus-import=cyhy_commander.nessus_import_tool:main",
         ]
     },
-    # license='LICENSE.txt',
+    license="LICENSE",
     description="Command and control application for Cyber Hygiene",
     python_requires="== 2.7.18",
     install_requires=[
