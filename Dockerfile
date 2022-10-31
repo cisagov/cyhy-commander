@@ -1,6 +1,8 @@
 FROM dhub.ncats.dhs.gov:5001/cyhy-core
-MAINTAINER Mark Feldhousen <mark.feldhousen@hq.dhs.gov>
 ENV CYHY_COMMANDER_SRC="/usr/src/cyhy-commander"
+
+LABEL org.opencontainers.image.authors="mark.feldhousen@cisa.dhs.gov"
+LABEL org.opencontainers.image.vendor="Cybersecurity and Infrastructure Security Agency"
 
 USER root
 WORKDIR ${CYHY_COMMANDER_SRC}
