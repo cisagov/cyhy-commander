@@ -17,6 +17,7 @@ setup(
     },
     license="LICENSE",
     description="Command and control application for Cyber Hygiene",
+    long_description=open("README.md").read(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
