@@ -17,6 +17,17 @@ setup(
     },
     license="LICENSE",
     description="Command and control application for Cyber Hygiene",
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Environment :: Console",
+        "Intended Audience :: System Administrators",
+        "License :: Public Domain",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.7",
+        "Topic :: Security",
+    ],
     python_requires="== 2.7.18",
     install_requires=[
         "cyhy-core >= 0.0.2",
