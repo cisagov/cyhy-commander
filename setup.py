@@ -31,10 +31,10 @@ setup(
     ],
     python_requires="== 2.7.18",
     install_requires=[
-        "cyhy-core >= 0.0.2",
-        "Fabric >= 1.8.3, < 2.0.0",
-        "docopt >= 0.6.2",
+        "cyhy-core @ git+https://github.com/cisagov/cyhy-core@v0.0.2",
+        "docopt == 0.6.2",
+        "Fabric == 1.15.0",
+        "lockfile == 0.12.2",
         "python-daemon == 2.3.0",
-        "lockfile >= 0.9.1",
     ],
 )
