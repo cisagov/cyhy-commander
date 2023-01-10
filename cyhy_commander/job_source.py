@@ -62,9 +62,11 @@ class DatabaseJobSource(JobSource):
         if not self.__db.HostDoc.exists(self.__job_type, STATUS.READY):
             return None
 
-        # actual attempt to claim ips
-        ips = self.__ch_db.fetch_ready_hosts(count=self.__count, stage=self.__job_type)
-        if len(ips) == 0:
+        # actual attempt to claim hosts
+        hosts = self.__ch_db.fetch_ready_hosts(
+            count=self.__count, stage=self.__job_type
+        )
+        if len(hosts) == 0:
             return None
 
         # create the job directory
@@ -81,8 +83,9 @@ class DatabaseJobSource(JobSource):
         target_file_name = "%s.txt" % dir_name
         target_path = os.path.join(job_path, target_file_name)
         target_file = open(target_path, "w")
-        for ip in ips:
-            print >> target_file, ip
+
+        for host in hosts:
+            print >> target_file, host["ip"]
         target_file.close()
 
         # vulnerability scans require a port list file
