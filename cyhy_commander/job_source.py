@@ -84,8 +84,19 @@ class DatabaseJobSource(JobSource):
         target_path = os.path.join(job_path, target_file_name)
         target_file = open(target_path, "w")
 
-        for host in hosts:
-            print >> target_file, host["ip"]
+        # vulnerability scans may include hostnames
+        if self.__job_type == STAGE.VULNSCAN:
+            for host in hosts:
+                # include all hostnames if present, otherwise use IP alone
+                if host.get("hostnames"):
+                    for hostname in host["hostnames"].keys():
+                        print >> target_file, "%s[%s]" % (hostname, host["ip"])
+                else:
+                    print >> target_file, host["ip"]
+        else:
+            for host in hosts:
+                print >> target_file, host["ip"]
+
         target_file.close()
 
         # vulnerability scans require a port list file
