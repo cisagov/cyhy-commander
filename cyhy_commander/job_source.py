@@ -1,8 +1,6 @@
 import os
 import shutil
 import tempfile
-import datetime
-import logging
 
 from cyhy.core import *
 from cyhy.db import CHDatabase
