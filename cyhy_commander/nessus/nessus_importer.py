@@ -174,10 +174,11 @@ class NessusImporter(object):
         report = self.__db.VulnScanDoc()
         util.copy_attrs(parsedReport, report)
 
-        report["source"] = NessusImporter.SOURCE
         report.ip = self.current_ip  # sets ip and ip_int
-        report["owner"] = self.current_ip_owner
+        report["hostname"] = self.current_hostname
         report["latest"] = True
+        report["owner"] = self.current_host_owner
+        report["source"] = NessusImporter.SOURCE
         report["time"] = self.current_ip_time
 
         try:
