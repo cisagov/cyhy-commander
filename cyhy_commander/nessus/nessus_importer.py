@@ -38,10 +38,10 @@ class NessusImporter(object):
         )
         self.__db = db
         self.__ch_db = CHDatabase(db)
+        self.current_host_owner = None
         self.current_hostname = None
         self.current_ip = None
         self.current_ip_int = None
-        self.current_ip_owner = None
         self.current_ip_time = None
         self.targets = None
         self.ticket_manager = VulnTicketManager(
@@ -135,7 +135,10 @@ class NessusImporter(object):
 
         parsedHost["ip"] = self.current_ip
         self.current_ip_int = int(self.current_ip)
-        self.current_ip_owner = self.__db.HostDoc.get_owner_of_ip(self.current_ip_int)
+        self.current_host_owner = self.__db.HostDoc.get_owner_of_ip(
+            self.current_ip_int, self.current_hostname
+        )
+
         if not self.manual_scan:
             # only change the time if we are not doing a manual scan import
             self.current_ip_time = parsedHost["end_time"]
