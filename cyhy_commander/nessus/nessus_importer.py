@@ -77,9 +77,9 @@ class NessusImporter(object):
 
     def targets_callback(self, targets_string):
         """list of targets read from the policy section
-           clear latest flags, and change host state
-           this is done here since all target do not necessarily
-           generate reports and host callbacks"""
+        clear latest flags, and change host state
+        this is done here since all target do not necessarily
+        generate reports and host callbacks"""
         targets = targets_string.split(",")
         self.targets = netaddr.IPSet(netaddr.IPAddress(i) for i in targets)
         self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
