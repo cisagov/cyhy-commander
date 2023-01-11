@@ -38,6 +38,7 @@ class NessusImporter(object):
         )
         self.__db = db
         self.__ch_db = CHDatabase(db)
+        self.current_hostname = None
         self.current_ip = None
         self.current_ip_int = None
         self.current_ip_owner = None
@@ -124,6 +125,13 @@ class NessusImporter(object):
                     % parsedHost["name"]
                 )
                 return
+
+        # look for a hostname; we can't trust parsedHost["name"] alone, since
+        # that can contain the IP address or some other user-supplied string
+        if parsedHost.get("host_fqdn") == parsedHost["name"]:
+            self.current_hostname = parsedHost["host_fqdn"]
+        else:
+            self.current_hostname = None
 
         parsedHost["ip"] = self.current_ip
         self.current_ip_int = int(self.current_ip)
