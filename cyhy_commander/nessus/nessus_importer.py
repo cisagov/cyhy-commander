@@ -142,12 +142,22 @@ class NessusImporter(object):
         if not self.manual_scan:
             # only change the time if we are not doing a manual scan import
             self.current_ip_time = parsedHost["end_time"]
-        if self.current_ip_owner is None:
-            self.current_ip_owner = UNKNOWN_OWNER
-            self.__logger.warning(
-                "Could not find owner for %s (%d)"
-                % (self.current_ip, self.current_ip_int)
-            )
+        if self.current_host_owner is None:
+            self.current_host_owner = UNKNOWN_OWNER
+            if self.current_hostname:
+                self.__logger.warning(
+                    "Could not find owner for %s - %s (%d)"
+                    % (
+                        self.current_hostname,
+                        self.current_ip,
+                        self.current_ip_int,
+                    )
+                )
+            else:
+                self.__logger.warning(
+                    "Could not find owner for %s (%d)"
+                    % (self.current_ip, self.current_ip_int)
+                )
 
         # Nessus host docs are not stored as we already have better data from nmap
 
