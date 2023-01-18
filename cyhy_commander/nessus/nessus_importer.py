@@ -202,11 +202,11 @@ class NessusImporter(object):
                 'Reached end of Nessus import but did not clear "latest" flags'
             )
             self.__logger.warning(
-                "Ticket manager state counts: %d ips, %d ports, %d plugin_ids"
+                "Ticket manager state counts: %d ips, %d ports, %d source_ids"
                 % (
-                    self.ticket_manager.ips,
-                    self.ticket_manager.ports,
-                    self.ticket_manager.plugin_ids,
+                    len(self.ticket_manager.ips),
+                    len(self.ticket_manager.ports),
+                    len(self.ticket_manager.source_ids),
                 )
             )
         else:
