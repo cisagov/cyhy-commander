@@ -129,24 +129,24 @@ COOLDOWN_DURATION = 60 * 30
 
 class Commander(object):
     def __init__(self, config_section=None, debug_logging=False, console_logging=False):
-        self.__logger = logging.getLogger(__name__)
-        self.__config_section = config_section
-        self.__is_running = True
         self.__all_hosts_idle = False
-        self.__next_scan_limit = 2000
-        self.__setup_logging(debug_logging, console_logging)
-        self.__setup_directories()
-        self.__nmap_sources = []
-        self.__nessus_sources = []
-        self.__success_sinks = []
+        self.__config_section = config_section
+        self.__db = None
         self.__failure_sinks = []
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
-        self.__db = None
-        self.__test_mode = False
+        self.__is_running = True
         self.__keep_failures = False
         self.__keep_successes = False
+        self.__logger = logging.getLogger(__name__)
+        self.__nessus_sources = []
+        self.__next_scan_limit = 2000
+        self.__nmap_sources = []
+        self.__setup_directories()
+        self.__setup_logging(debug_logging, console_logging)
         self.__shutdown_when_idle = False
+        self.__success_sinks = []
+        self.__test_mode = False
 
     def __setup_logging(self, debug_logging, console_logging):
         # get default logging setup
