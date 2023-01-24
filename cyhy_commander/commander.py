@@ -49,68 +49,68 @@ from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
 from job_source import DirectoryJobSource, DatabaseJobSource
 
 # fabric configuration
-env.use_ssh_config = True
-env.keepalive = 30
 env.command_timeout = 60
+env.keepalive = 30
+env.use_ssh_config = True
 
 # remote files
-RUNNING_DIR = "runner/running"
 DONE_DIR = "runner/done"
-READY_FILE = ".ready"
 DONE_FILE = ".done"
+READY_FILE = ".ready"
+RUNNING_DIR = "runner/running"
 
 # local files
-PUSHED_DIR = "pushed"
-SUCCESS_DIR = "done"
-FAILED_DIR = "failed"
-DROP_DIR = "drop"
-LOG_FILE = "/var/log/cyhy/commander.log"
 CONFIG_FILENAME = "/etc/cyhy/commander.conf"
-STOP_FILE = "stop"
-LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(name)s - %(message)s"
 DEFAULT_LOGGER_LEVEL = logging.INFO
+DROP_DIR = "drop"
+FAILED_DIR = "failed"
 LOCK_FILENAME = "cyhy-commander"
+LOG_FILE = "/var/log/cyhy/commander.log"
+LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(name)s - %(message)s"
+PUSHED_DIR = "pushed"
+STOP_FILE = "stop"
+SUCCESS_DIR = "done"
 
 # local job files
 me = os.path.realpath(__file__)
 myDir = os.path.dirname(me)
 jobsDir = os.path.join(myDir, "jobs")
+BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
 NETSCAN1_JOB_FILE = os.path.join(jobsDir, "netscan1.sh")
 NETSCAN2_JOB_FILE = os.path.join(jobsDir, "netscan2.sh")
 PORTSCAN_JOB_FILE = os.path.join(jobsDir, "portscan.sh")
-VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
-BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
 SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep.py")
+VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 
 # config file
-DEFAULT = "DEFAULT"
-PRODUCTION_SECTION = "production"
-TESTING_SECTION = "testing"
-TESTING_PURGE_SECTION = "testing-purge"
-NMAP_HOSTS = "nmap-hosts"
-NESSUS_HOSTS = "nessus-hosts"
-JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
-JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
-POLL_INTERVAL = "poll-interval"
 DATABASE_NAME = "database-name"
 DATABASE_URI = "database-uri"
+DEFAULT = "DEFAULT"
 DEFAULT_SECTION = "default-section"
-TEST_MODE = "test-mode"
+JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
+JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
 KEEP_FAILURES = "keep-failures"
 KEEP_SUCCESSES = "keep-successes"
-SHUTDOWN_WHEN_IDLE = "shutdown-when-idle"
+NESSUS_HOSTS = "nessus-hosts"
 NEXT_SCAN_LIMIT = "next-scan-limit"
+NMAP_HOSTS = "nmap-hosts"
+POLL_INTERVAL = "poll-interval"
+PRODUCTION_SECTION = "production"
+SHUTDOWN_WHEN_IDLE = "shutdown-when-idle"
+TEST_MODE = "test-mode"
+TESTING_PURGE_SECTION = "testing-purge"
+TESTING_SECTION = "testing"
 
 # TODO eventual config options
+IPS_PER_BASESCAN_JOB = 32
 IPS_PER_NETSCAN1_JOB = 128
 IPS_PER_NETSCAN2_JOB = 128 / 2
 IPS_PER_PORTSCAN_JOB = 32 / 4
 IPS_PER_VULNSCAN_JOB = 4
-IPS_PER_BASESCAN_JOB = 32
 RANDOMIZE_SOURCES = True
 
-NMAP_WORKGROUP = "nmap"
 NESSUS_WORKGROUP = "nessus"
+NMAP_WORKGROUP = "nmap"
 
 # The number of exceptions to allow before putting a host on "cooldown".
 #
