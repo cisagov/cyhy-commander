@@ -101,6 +101,7 @@ class DatabaseJobSource(JobSource):
 
         # vulnerability scans require a port list file
         if self.__job_type == STAGE.VULNSCAN:
+            ips = [host["ip"] for host in hosts]
             ports = self.__ch_db.get_open_ports(ips)
             ports_string = util.list_to_range_string(ports)
             ports_path = os.path.join(job_path, PORTS_FILE_NAME)
