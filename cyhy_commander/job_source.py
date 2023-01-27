@@ -89,8 +89,8 @@ class DatabaseJobSource(JobSource):
             for host in hosts:
                 # include all hostnames if present, otherwise use IP alone
                 if host.get("hostnames"):
-                    for hostname in host["hostnames"].keys():
-                        print >> target_file, "%s[%s]" % (hostname, host["ip"])
+                    for h in host["hostnames"]:
+                        print >> target_file, "%s[%s]" % (h["hostname"], host["ip"])
                 else:
                     print >> target_file, host["ip"]
         else:
