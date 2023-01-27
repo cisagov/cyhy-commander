@@ -86,6 +86,7 @@ VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 DATABASE_NAME = "database-name"
 DATABASE_URI = "database-uri"
 DEFAULT = "DEFAULT"
+DEFAULT_OWNER = "default-owner"
 DEFAULT_SECTION = "default-section"
 JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
 JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
@@ -480,6 +481,7 @@ class Commander(object):
         config.set(None, TEST_MODE, "false")
         config.set(None, KEEP_FAILURES, "false")
         config.set(None, SHUTDOWN_WHEN_IDLE, "false")
+        config.set(None, DEFAULT_OWNER, "CYHY")
         config.add_section(TESTING_SECTION)
         config.set(TESTING_SECTION, NMAP_HOSTS, "comma,separated,list")
         config.set(TESTING_SECTION, NESSUS_HOSTS, "comma,separated,list")
@@ -504,6 +506,24 @@ class Commander(object):
         config = SafeConfigParser()
         config.read([CONFIG_FILENAME])
         return config
+
+    def __setup_default_owner(self, owner):
+        # Check if request doc for default owner exists and if not, create it
+        if not self.__db.RequestDoc.find_one({"_id": owner}):
+            self.__logger.info("%s request document does not exist; creating..." % owner)
+            # Create a new request document populated with default values
+            request = self.__db.RequestDoc()
+            # Customize request document for the default owner
+            request["_id"] = owner
+            request["agency"]["acronym"] = owner
+            request["agency"]["name"] = "Default CyHy system owner"
+            # Remove the location field; it is not required here
+            request["agency"].pop("location")
+            # Enable scanning for default owner
+            request["scan_types"] = [SCAN_TYPE.CYHY]
+            # No need to set a scheduler; the default scheduler will be used
+            request.save()
+            self.__logger.info("%s request document created" % owner)
 
     def do_work(self):
         env.warn_only = True
@@ -564,6 +584,9 @@ class Commander(object):
             config_section, SHUTDOWN_WHEN_IDLE
         )
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
+        default_owner = config.get(config_section, DEFAULT_OWNER)
+        self.__logger.info('Default owner: "%s"' % default_owner)
+        self.__setup_default_owner(default_owner)
         self.__setup_sources()
         self.__setup_sinks()
 
