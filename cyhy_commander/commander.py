@@ -480,6 +480,7 @@ class Commander(object):
         config.set(None, DEFAULT_SECTION, TESTING_SECTION)
         config.set(None, TEST_MODE, "false")
         config.set(None, KEEP_FAILURES, "false")
+        config.set(None, KEEP_SUCCESSES, "false")
         config.set(None, SHUTDOWN_WHEN_IDLE, "false")
         config.set(None, DEFAULT_OWNER, "CYHY")
         config.add_section(TESTING_SECTION)
