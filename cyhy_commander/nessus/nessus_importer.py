@@ -82,7 +82,19 @@ class NessusImporter(object):
         this is done here since all target do not necessarily
         generate reports and host callbacks"""
         targets = targets_string.split(",")
-        self.targets = netaddr.IPSet(netaddr.IPAddress(i) for i in targets)
+        self.targets = netaddr.IPSet()
+        for t in targets:
+            # If any targets are a hostname and an IP addresss (e.g.
+            # "foo.gov[192.168.1.1]"), extract the IP address.
+            #
+            # This could be done via regex, but I don't think there's any
+            # benefit that justifies the additional import.  If the target is
+            # malformed (e.g. something other than a valid IP in the brackets,
+            # no closing bracket, etc.), casting to an IPAddress will fail
+            # regardless of how we parse it.
+            if "[" in t:
+                t = t.split("[")[1][:-1]
+            self.targets.add(netaddr.IPAddress(t))
         self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
         self.ticket_manager.ips = self.targets
         self.__try_to_clear_latest_flags()
