@@ -510,7 +510,7 @@ class Commander(object):
         config.read([CONFIG_FILENAME])
         return config
 
-    def __setup_default_owner(self, owner):
+    def __setup_default_owner(self, owner, scheduler):
         # Check if request doc for default owner exists and if not, create it
         if not self.__db.RequestDoc.find_one({"_id": owner}):
             self.__logger.info("%s request document does not exist; creating..." % owner)
@@ -524,7 +524,7 @@ class Commander(object):
             request["agency"].pop("location")
             # Enable scanning for default owner
             request["scan_types"] = [SCAN_TYPE.CYHY]
-            # No need to set a scheduler; the default scheduler will be used
+            request["scheduler"] = scheduler
             request.save()
             self.__logger.info("%s request document created" % owner)
 
@@ -589,7 +589,9 @@ class Commander(object):
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
         default_owner = config.get(config_section, DEFAULT_OWNER)
         self.__logger.info('Default owner: "%s"' % default_owner)
-        self.__setup_default_owner(default_owner)
+        default_scheduler = config.get(config_section, DEFAULT_SCHEDULER)
+        self.__logger.info('Default scheduler: "%s"' % default_scheduler)
+        self.__setup_default_owner(default_owner, default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
 
