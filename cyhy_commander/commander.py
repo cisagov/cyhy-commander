@@ -87,6 +87,7 @@ DATABASE_NAME = "database-name"
 DATABASE_URI = "database-uri"
 DEFAULT = "DEFAULT"
 DEFAULT_OWNER = "default-owner"
+DEFAULT_SCHEDULER = "default-scheduler"
 DEFAULT_SECTION = "default-section"
 JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
 JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
@@ -483,6 +484,7 @@ class Commander(object):
         config.set(None, KEEP_SUCCESSES, "false")
         config.set(None, SHUTDOWN_WHEN_IDLE, "false")
         config.set(None, DEFAULT_OWNER, "CYHY")
+        config.set(None, DEFAULT_SCHEDULER, "PERSISTENT1")
         config.add_section(TESTING_SECTION)
         config.set(TESTING_SECTION, NMAP_HOSTS, "comma,separated,list")
         config.set(TESTING_SECTION, NESSUS_HOSTS, "comma,separated,list")
