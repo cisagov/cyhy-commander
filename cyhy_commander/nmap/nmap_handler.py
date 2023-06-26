@@ -67,14 +67,14 @@ class NmapContentHandler(ContentHandler):
             copy_attrs(attrs, service, ["servicefp"])
         elif (
             name == "osmatch"
-            and self.xmloutputversion == "1.04"
+            and self.xmloutputversion in ["1.04", "1.05"]
             and not self.first_osmatch_done_for_host
         ):
             os = self.currentHost["os"] = {"classes": []}
             copy_attrs(attrs, os)
         elif (
             name == "osclass"
-            and self.xmloutputversion == "1.04"
+            and self.xmloutputversion in ["1.04", "1.05"]
             and not self.first_osmatch_done_for_host
         ):
             clazz = {}
