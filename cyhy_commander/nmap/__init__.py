@@ -1,4 +1,4 @@
-__all__ = ["NmapImporter", "NmapContentHander"]
+__all__ = ["NmapImporter", "NmapContentHandler"]
 
-from nmap_handler import NmapContentHander
+from nmap_handler import NmapContentHandler
 from nmap_importer import NmapImporter

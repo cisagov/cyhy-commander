@@ -5,7 +5,7 @@ import netaddr
 from cyhy.util import copy_attrs
 
 
-class NmapContentHander(ContentHandler):
+class NmapContentHandler(ContentHandler):
     def __init__(self, host_callback, end_callback):
         ContentHandler.__init__(self)
         self.host_callback = host_callback
