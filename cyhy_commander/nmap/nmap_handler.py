@@ -5,7 +5,7 @@ import netaddr
 from cyhy.util import copy_attrs
 
 
-class NmapContentHander(ContentHandler):
+class NmapContentHandler(ContentHandler):
     def __init__(self, host_callback, end_callback):
         ContentHandler.__init__(self)
         self.host_callback = host_callback
@@ -67,14 +67,14 @@ class NmapContentHander(ContentHandler):
             copy_attrs(attrs, service, ["servicefp"])
         elif (
             name == "osmatch"
-            and self.xmloutputversion == "1.04"
+            and self.xmloutputversion in ["1.04", "1.05"]
             and not self.first_osmatch_done_for_host
         ):
             os = self.currentHost["os"] = {"classes": []}
             copy_attrs(attrs, os)
         elif (
             name == "osclass"
-            and self.xmloutputversion == "1.04"
+            and self.xmloutputversion in ["1.04", "1.05"]
             and not self.first_osmatch_done_for_host
         ):
             clazz = {}
