@@ -343,10 +343,10 @@ def main():
     LOGGER.info("Using ports file: %s", ports_file)
 
     # read in targets and ports
-    with open(targets_file, "r") as f:
+    with open(targets_file) as f:
         targets = f.readlines()
 
-    with open(ports_file, "r") as f:
+    with open(ports_file) as f:
         ports = f.readline().strip()
 
     # Before beginning work that involves the Nessus Controller we will sleep for a
