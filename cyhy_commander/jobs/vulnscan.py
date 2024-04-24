@@ -5,6 +5,7 @@ import copy
 import glob
 import json
 import logging
+import secrets
 import sys
 import time
 
@@ -50,6 +51,10 @@ VERIFY_SSL = False
 FAILED_REQUEST_MAX_RETRIES = 6
 # Seconds to wait between failed request retries
 FAILED_REQUEST_RETRY_WAIT_SEC = 30
+
+# The maximum amount of time in seconds to sleep before connecting to the Nessus
+# Controller.
+MAX_SLEEP_SEC = 30
 
 if DEBUG:
     # Standard Python Libraries
@@ -343,6 +348,11 @@ def main():
 
     with open(ports_file, "r") as f:
         ports = f.readline().strip()
+
+    # Before beginning work that involves the Nessus Controller we will sleep for a
+    # random amount of time (range of [0, MAX_SLEEP_SEC+1) seconds) to help prevent
+    # Nessus from getting overloaded by multiple jobs starting at the same time.
+    time.sleep(secrets.randbelow(MAX_SLEEP_SEC + 1))
 
     try:
         LOGGER.info("Instantiating Nessus controller at: %s", api_configuration["url"])
