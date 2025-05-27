@@ -11,7 +11,7 @@ import netaddr
 from cyhy.core import STAGE, UNKNOWN_OWNER
 from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
-from nmap_handler import NmapContentHander
+from nmap_handler import NmapContentHandler
 
 RISKY_SERVICES_SOURCE_ID = 1  # Identifier for "risky service" tickets
 # Pulled from https://svn.nmap.org/nmap/nmap-services
@@ -53,12 +53,12 @@ class NmapImporter(object):
     def __init__(self, db, stage=STAGE.PORTSCAN):
         self.__logger = logging.getLogger(__name__)
         if stage in (STAGE.NETSCAN1, STAGE.NETSCAN2):
-            self.handler = NmapContentHander(
+            self.handler = NmapContentHandler(
                 self.__netscan_host_callback, self.__end_callback
             )
             self.__ticket_manager = IPTicketManager(db)
         elif stage == STAGE.PORTSCAN:
-            self.handler = NmapContentHander(
+            self.handler = NmapContentHandler(
                 self.__portscan_host_callback, self.__end_callback
             )
             self.__ticket_manager = IPPortTicketManager(
@@ -68,7 +68,7 @@ class NmapImporter(object):
                 1, 65536
             )  # A PORTSCAN is all ports.  Don't consider port 0 in scope.
         elif stage == STAGE.BASESCAN:
-            self.handler = NmapContentHander(
+            self.handler = NmapContentHandler(
                 self.__baseline_host_callback, self.__end_callback
             )
             self.__ticket_manager = None
