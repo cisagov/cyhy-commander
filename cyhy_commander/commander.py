@@ -512,6 +512,14 @@ class Commander(object):
 
     def __setup_default_owner(self, owner, scheduler):
         # Check if request doc for default owner exists and if not, create it
+        #
+        # The default owner owns all "ownerless" HostDocs.  The default owner's
+        # RequestDoc does not have a valid list of networks (IP addresses), but
+        # it does have scan windows and concurrency settings.  Those "ownerless"
+        # HostDocs are created when a CyHy entity has a hostname that resolves
+        # to IP addresses that are not already owned by a CyHy entity.  This is
+        # how we account for cases where an entity owns a hostname, but not
+        # necessarily the IP addresses that it resolves to.
         if not self.__db.RequestDoc.find_one({"_id": owner}):
             self.__logger.info("%s request document does not exist; creating..." % owner)
             # Create a new request document populated with default values
