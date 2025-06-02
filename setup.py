@@ -5,7 +5,7 @@ setup(
     name="cyhy-commander",
     version="1.0.0",
     author="Mark Feldhousen Jr.",
-    author_email="mark.feldhousen@trio.dhs.gov",
+    author_email="mark.feldhousen@cisa.dhs.gov",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
