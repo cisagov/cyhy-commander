@@ -86,7 +86,6 @@ VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 DATABASE_NAME = "database-name"
 DATABASE_URI = "database-uri"
 DEFAULT = "DEFAULT"
-DEFAULT_OWNER = "default-owner"
 DEFAULT_SCHEDULER = "default-scheduler"
 DEFAULT_SECTION = "default-section"
 JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
@@ -483,7 +482,6 @@ class Commander(object):
         config.set(None, KEEP_FAILURES, "false")
         config.set(None, KEEP_SUCCESSES, "false")
         config.set(None, SHUTDOWN_WHEN_IDLE, "false")
-        config.set(None, DEFAULT_OWNER, "CYHY")
         config.set(None, DEFAULT_SCHEDULER, "PERSISTENT1")
         config.add_section(TESTING_SECTION)
         config.set(TESTING_SECTION, NMAP_HOSTS, "comma,separated,list")
@@ -595,11 +593,10 @@ class Commander(object):
             config_section, SHUTDOWN_WHEN_IDLE
         )
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
-        default_owner = config.get(config_section, DEFAULT_OWNER)
-        self.__logger.info('Default owner: "%s"' % default_owner)
+        self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
         default_scheduler = config.get(config_section, DEFAULT_SCHEDULER)
         self.__logger.info('Default scheduler: "%s"' % default_scheduler)
-        self.__setup_default_owner(default_owner, default_scheduler)
+        self.__setup_default_owner(DEFAULT_OWNER, default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
 
