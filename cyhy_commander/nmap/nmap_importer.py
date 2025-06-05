@@ -8,7 +8,7 @@ from xml.sax import parse
 import netaddr
 
 # local libraries
-from cyhy.core import STAGE, UNKNOWN_OWNER
+from cyhy.core import DEFAULT_OWNER, STAGE, UNKNOWN_OWNER
 from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
 from cyhy.util import util
 from nmap_handler import NmapContentHandler
@@ -125,9 +125,20 @@ class NmapImporter(object):
                     details["service"]["name"]
                 )
                 report["service"] = details["service"]["name"]
-                self.__ticket_manager.open_ticket(
-                    report, "potentially risky service detected"
-                )
+                # Check for hostnames associated with the IP
+                ip_hostname_owners = self.__db.HostDoc.get_all_hostname_owners_of_ip(ip)
+                # If IP owner is not in the list of hostname owners, add it
+                if ip_owner not in ip_hostname_owners:
+                    ip_hostname_owners.append(ip_owner)
+                # Remove the default owner if it is in ip_hostname_owners
+                if DEFAULT_OWNER in ip_hostname_owners:
+                    ip_hostname_owners.remove(DEFAULT_OWNER)
+                # Open a ticket for all relevant owners
+                for hostname_owner in ip_hostname_owners:
+                    report["owner"] = hostname_owner
+                    self.__ticket_manager.open_ticket(
+                        report, "potentially risky service detected"
+                    )
         return has_at_least_one_open_port
 
     def __store_os_details(self, parsed_host):
