@@ -96,7 +96,11 @@ class NmapImporter(object):
         has_at_least_one_open_port = False
         ip = parsed_host["addr"]
         time = parsed_host["endtime"]
-        ip_owner = self.__db.HostDoc.get_owner_of_ip(ip)
+        host_doc = self.__db.HostDoc.get_by_ip(ip)
+        if host_doc:
+            ip_owner = host_doc.get("owner")
+        else:
+            ip_owner = None
         for (port, details) in parsed_host["ports"].items():
             if details["state"] != "open":  # only storing open ports
                 continue
@@ -125,17 +129,28 @@ class NmapImporter(object):
                     details["service"]["name"]
                 )
                 report["service"] = details["service"]["name"]
-                # Check for hostnames associated with the IP
-                ip_hostname_owners = self.__db.HostDoc.get_all_hostname_owners_of_ip(ip)
-                # If IP owner is not in the list of hostname owners, add it
-                if ip_owner not in ip_hostname_owners:
-                    ip_hostname_owners.append(ip_owner)
-                # Remove the default owner if it is in ip_hostname_owners
-                if DEFAULT_OWNER in ip_hostname_owners:
-                    ip_hostname_owners.remove(DEFAULT_OWNER)
-                # Open a ticket for all relevant owners
-                for hostname_owner in ip_hostname_owners:
-                    report["owner"] = hostname_owner
+                ticket_opened_for_owners = set()
+                # Loop thru hostnames/owners associated with the host (if any)
+                for h in host_doc.get("hostnames", []):
+                    # We don't want to open any tickets for the default owner
+                    if h["owner"] is not DEFAULT_OWNER:
+                        report["hostname"] = h["hostname"]
+                        report["owner"] = h["owner"]
+                        # Open a ticket for this hostname/owner combination
+                        self.__ticket_manager.open_ticket(
+                            report, "potentially risky service detected"
+                        )
+                        ticket_opened_for_owners.add(h["owner"])
+                # If IP owner is not the default owner and we didn't just open
+                # a ticket for them, open a ticket for the IP owner
+                if (
+                    ip_owner != DEFAULT_OWNER
+                    and ip_owner not in ticket_opened_for_owners
+                    and ip_owner is not None
+                ):
+                    report["hostname"] = None
+                    report["owner"] = ip_owner
+                    # Open a ticket for the IP owner
                     self.__ticket_manager.open_ticket(
                         report, "potentially risky service detected"
                     )
