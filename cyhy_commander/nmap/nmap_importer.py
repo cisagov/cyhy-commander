@@ -95,10 +95,9 @@ class NmapImporter(object):
     def __store_port_details(self, parsed_host):
         has_at_least_one_open_port = False
         ip = parsed_host["addr"]
-        time = parsed_host["endtime"]
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc:
-            ip_owner = host_doc.get("owner")
+            ip_owner = host_doc.get("owner", UNKNOWN_OWNER)
         else:
             ip_owner = None
         for (port, details) in parsed_host["ports"].items():
@@ -113,72 +112,96 @@ class NmapImporter(object):
             else:
                 has_at_least_one_open_port = True
                 self.__ticket_manager.port_open(ip, port)
-            details["ip"] = ip
-            details["ip_int"] = long(ip)
             details["port"] = port
-            details["time"] = time
+            details["time"] = parsed_host["endtime"]
             details["source"] = NmapImporter.SOURCE
-            details["owner"] = ip_owner
             details["latest"] = True
-            report = self.__db.PortScanDoc()
-            util.copy_attrs(details, report)
-            report.save()
-            if details.get("service", {}).get("name") in RISKY_SERVICES:
-                report["source_id"] = RISKY_SERVICES_SOURCE_ID
-                report["name"] = "Potentially Risky Service Detected: {}".format(
-                    details["service"]["name"]
-                )
-                report["service"] = details["service"]["name"]
-                ticket_opened_for_owners = set()
-                # Loop thru hostnames/owners associated with the host (if any)
-                for h in host_doc.get("hostnames", []):
-                    # We don't want to open any tickets for the default owner
-                    if h["owner"] is not DEFAULT_OWNER:
-                        report["hostname"] = h["hostname"]
-                        report["owner"] = h["owner"]
+
+            ticket_opened_for_owners = set()
+            if host_doc and host_doc.get("hostnames"):
+                # Create a PortScanDoc for each hostname/owner combination
+                for h in host_doc["hostnames"]:
+                    report = self.__db.PortScanDoc()
+                    util.copy_attrs(details, report)
+                    report["owner"] = h.get("owner", UNKNOWN_OWNER)
+                    report["hostname"] = h["hostname"]
+                    report.ip = ip  # sets ip and ip_int
+                    report.save()
+                    if details.get("service", {}).get("name") in RISKY_SERVICES:
+                        report["source_id"] = RISKY_SERVICES_SOURCE_ID
+                        report["name"] = "Potentially Risky Service Detected: {}".format(
+                            details["service"]["name"]
+                        )
+                        report["service"] = details["service"]["name"]
                         # Open a ticket for this hostname/owner combination
                         self.__ticket_manager.open_ticket(
                             report, "potentially risky service detected"
                         )
                         ticket_opened_for_owners.add(h["owner"])
-                # If IP owner is not the default owner and we didn't just open
-                # a ticket for them, open a ticket for the IP owner
-                if (
-                    ip_owner != DEFAULT_OWNER
-                    and ip_owner not in ticket_opened_for_owners
-                    and ip_owner is not None
-                ):
-                    report["hostname"] = None
-                    report["owner"] = ip_owner
-                    # Open a ticket for the IP owner
-                    self.__ticket_manager.open_ticket(
-                        report, "potentially risky service detected"
-                    )
+            else:
+                # There are no hostnames in the HostDoc, so create a single
+                # PortScanDoc with no hostname that is owned by the IP owner
+                report = self.__db.PortScanDoc()
+                util.copy_attrs(details, report)
+                report["owner"] = ip_owner
+                report["hostname"] = None
+                report.ip = ip  # sets ip and ip_int
+                report.save()
+                if details.get("service", {}).get("name") in RISKY_SERVICES:
+                    # If IP owner is not the default owner and we didn't open a
+                    # ticket for them above, open a ticket for the IP owner
+                    if (
+                        ip_owner != DEFAULT_OWNER
+                        and ip_owner != UNKNOWN_OWNER
+                        and ip_owner not in ticket_opened_for_owners
+                        and ip_owner is not None
+                    ):
+                        report["source_id"] = RISKY_SERVICES_SOURCE_ID
+                        report["name"] = "Potentially Risky Service Detected: {}".format(
+                            details["service"]["name"]
+                        )
+                        report["service"] = details["service"]["name"]
+                        self.__ticket_manager.open_ticket(
+                            report, "potentially risky service detected"
+                        )
         return has_at_least_one_open_port
 
     def __store_os_details(self, parsed_host):
-        host = self.__db.HostScanDoc()
+        details = dict()
         if parsed_host.has_key("os"):
-            util.copy_attrs(parsed_host["os"], host)
-            host["line"] = int(host["line"])
-            host["accuracy"] = int(host["accuracy"])
+            util.copy_attrs(parsed_host["os"], details)
+            details["line"] = int(details["line"])
+            details["accuracy"] = int(details["accuracy"])
         else:
-            host["accuracy"] = 0
-            host["name"] = "unknown"
+            details["accuracy"] = 0
+            details["name"] = "unknown"
+        details["time"] = parsed_host["endtime"]
+        details["source"] = NmapImporter.SOURCE
+        details["latest"] = True
+
         ip = parsed_host["addr"]
-        hostname = parsed_host.get("hostname", None)
-        ip_owner = self.__db.HostDoc.get_owner_of_ip(ip)
-        if ip_owner is None:
-            ip_owner = UNKNOWN_OWNER
-            self.__logger.warning("Could not find owner for %s" % ip)
-        host["owner"] = ip_owner
-        time = parsed_host["endtime"]
-        host.ip = ip  # sets ip and ip_int
-        host["hostname"] = hostname
-        host["time"] = time
-        host["source"] = NmapImporter.SOURCE
-        host["latest"] = True
-        host.save()
+        host_doc = self.__db.HostDoc.get_by_ip(ip)
+        if host_doc and host_doc.get("hostnames"):
+            # Create a HostScanDoc for each hostname/owner combination
+            for h in host_doc["hostnames"]:
+                host = self.__db.HostScanDoc()
+                util.copy_attrs(details, host)
+                host["owner"] = h.get("owner", UNKNOWN_OWNER)
+                host["hostname"] = h["hostname"]
+                host.ip = ip  # sets ip and ip_int
+                host.save()
+        else:
+            # There are no hostnames in the HostDoc, so create a single
+            # HostScanDoc and use the hostname nmap found (if any)
+            host = self.__db.HostScanDoc()
+            util.copy_attrs(details, host)
+            if host_doc:
+                host["owner"] = host_doc.get("owner", UNKNOWN_OWNER)
+            else:
+                host["owner"] = UNKNOWN_OWNER
+            host["hostname"] = parsed_host.get("hostname", None)
+            host.ip = ip  # sets ip and ip_int
+            host.save()
 
     def __baseline_host_callback(self, parsed_host):
         self.__store_port_details(parsed_host)
