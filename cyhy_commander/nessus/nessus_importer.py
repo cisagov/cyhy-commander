@@ -93,7 +93,7 @@ class NessusImporter(object):
             # no closing bracket, etc.), casting to an IPAddress will fail
             # regardless of how we parse it.
             if "[" in t:
-                t = t.split("[")[1][:-1]
+                t = t.strip().split("[")[1][:-1]
             self.targets.add(netaddr.IPAddress(t))
         self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
         self.ticket_manager.ips = self.targets
