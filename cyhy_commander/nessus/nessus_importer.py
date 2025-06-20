@@ -137,19 +137,38 @@ class NessusImporter(object):
                     % parsedHost["name"]
                 )
                 return
-
-        # look for a hostname; we can't trust parsedHost["name"] alone, since
-        # that can contain the IP address or some other user-supplied string
-        if parsedHost.get("host_fqdn") == parsedHost["name"]:
-            self.current_hostname = parsedHost["host_fqdn"]
-        else:
-            self.current_hostname = None
-
         parsedHost["ip"] = self.current_ip
-        self.current_ip_int = int(self.current_ip)
-        self.current_host_owner = self.__db.HostDoc.get_owner_of_ip(
-            self.current_ip_int, self.current_hostname
-        )
+
+        # Try to determine the hostname and owner
+        self.current_hostname = None
+        self.current_host_owner = None
+        host_doc = self.__db.HostDoc.get_by_ip(self.current_ip)
+        if host_doc and host_doc.get("hostnames"):
+            # First, check if there is a HostDoc with a hostname that matches 
+            # the parsedHost["name"].
+            for h in host_doc["hostnames"]:
+                if h["hostname"] == parsedHost["name"]:
+                    self.current_hostname = h["hostname"]
+                    self.current_host_owner = h.get("owner")
+                    break
+            # If we haven't set the hostname yet, check if there is a HostDoc
+            # hostname that matches parsedHost["host_fqdn"].
+            if not self.current_hostname:
+                for h in host_doc["hostnames"]:
+                    if h["hostname"] == parsedHost.get("host_fqdn"):
+                        self.current_hostname = h["hostname"]
+                        self.current_host_owner = h.get("owner")
+                        break
+
+        # If we still haven't set the hostname, check if parsedHost["host_fqdn"]
+        # matches the parsedHost["name"], and use that.  We can't trust
+        # parsedHost["name"] alone, since that can contain the IP address or
+        # some other user-supplied string.
+        if not self.current_hostname and (
+            parsedHost.get("host_fqdn") == parsedHost["name"]
+        ):
+            self.current_hostname = parsedHost["host_fqdn"]
+            self.current_host_owner = host_doc.get("owner") if host_doc else None
 
         if not self.manual_scan:
             # only change the time if we are not doing a manual scan import
