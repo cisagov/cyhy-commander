@@ -144,7 +144,7 @@ class NessusImporter(object):
         self.current_host_owner = None
         host_doc = self.__db.HostDoc.get_by_ip(self.current_ip)
         if host_doc and host_doc.get("hostnames"):
-            # First, check if there is a HostDoc with a hostname that matches 
+            # First, check if there is a HostDoc with a hostname that matches
             # the parsedHost["name"].
             for h in host_doc["hostnames"]:
                 if h["hostname"] == parsedHost["name"]:
