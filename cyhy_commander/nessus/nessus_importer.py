@@ -41,7 +41,6 @@ class NessusImporter(object):
         self.current_host_owner = None
         self.current_hostname = None
         self.current_ip = None
-        self.current_ip_int = None
         self.current_ip_time = None
         self.targets = None
         self.ticket_manager = VulnTicketManager(
@@ -185,13 +184,13 @@ class NessusImporter(object):
                     % (
                         self.current_hostname,
                         self.current_ip,
-                        self.current_ip_int,
+                        int(self.current_ip),
                     )
                 )
             else:
                 self.__logger.warning(
                     "Could not find owner for %s (%d)"
-                    % (self.current_ip, self.current_ip_int)
+                    % (self.current_ip, int(self.current_ip))
                 )
 
         # Nessus host docs are not stored as we already have better data from nmap
