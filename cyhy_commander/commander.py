@@ -511,7 +511,7 @@ class Commander(object):
         config.read([CONFIG_FILENAME])
         return config
 
-    def __setup_default_owner(self, owner, scheduler):
+    def __setup_default_owner(self, scheduler):
         # Check if request doc for default owner exists and if not, create it
         #
         # The default owner owns all "ownerless" HostDocs.  The default owner's
@@ -521,13 +521,13 @@ class Commander(object):
         # to IP addresses that are not already owned by a CyHy entity.  This is
         # how we account for cases where an entity owns a hostname, but not
         # necessarily the IP addresses that it resolves to.
-        if not self.__db.RequestDoc.find_one({"_id": owner}):
-            self.__logger.info("%s request document does not exist; creating..." % owner)
+        if not self.__db.RequestDoc.get_by_owner(DEFAULT_OWNER):
+            self.__logger.info("%s request document does not exist; creating..." % DEFAULT_OWNER)
             # Create a new request document populated with default values
             request = self.__db.RequestDoc()
             # Customize request document for the default owner
-            request["_id"] = owner
-            request["agency"]["acronym"] = owner
+            request["_id"] = DEFAULT_OWNER
+            request["agency"]["acronym"] = DEFAULT_OWNER
             request["agency"]["name"] = "Default CyHy system owner"
             # Remove the location field; it is not required here
             request["agency"].pop("location")
@@ -535,7 +535,7 @@ class Commander(object):
             request["scan_types"] = [SCAN_TYPE.CYHY]
             request["scheduler"] = scheduler
             request.save()
-            self.__logger.info("%s request document created" % owner)
+            self.__logger.info("%s request document created" % DEFAULT_OWNER)
 
     def do_work(self):
         env.warn_only = True
@@ -599,7 +599,7 @@ class Commander(object):
         self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
         default_scheduler = config.get(config_section, DEFAULT_SCHEDULER)
         self.__logger.info('Default scheduler: "%s"' % default_scheduler)
-        self.__setup_default_owner(DEFAULT_OWNER, default_scheduler)
+        self.__setup_default_owner(default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
 
