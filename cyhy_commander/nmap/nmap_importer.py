@@ -117,7 +117,6 @@ class NmapImporter(object):
             details["source"] = NmapImporter.SOURCE
             details["latest"] = True
 
-            ticket_opened_for_owners = set()
             if host_doc and host_doc.get("hostnames"):
                 # Create a PortScanDoc for each hostname/owner combination
                 for h in host_doc["hostnames"]:
@@ -137,7 +136,6 @@ class NmapImporter(object):
                         self.__ticket_manager.open_ticket(
                             report, "potentially risky service detected"
                         )
-                        ticket_opened_for_owners.add(h["owner"])
             else:
                 # There are no hostnames in the HostDoc, so create a single
                 # PortScanDoc with no hostname that is owned by the IP owner
@@ -148,12 +146,11 @@ class NmapImporter(object):
                 report.ip = ip  # sets ip and ip_int
                 report.save()
                 if details.get("service", {}).get("name") in RISKY_SERVICES:
-                    # If IP owner is not the default owner and we didn't open a
-                    # ticket for them above, open a ticket for the IP owner
+                    # If IP owner is known and is not the default owner, open a
+                    # ticket
                     if (
                         ip_owner != DEFAULT_OWNER
                         and ip_owner != UNKNOWN_OWNER
-                        and ip_owner not in ticket_opened_for_owners
                         and ip_owner is not None
                     ):
                         report["source_id"] = RISKY_SERVICES_SOURCE_ID
