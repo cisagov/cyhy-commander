@@ -66,7 +66,7 @@ class DatabaseJobSource(JobSource):
         hosts = self.__ch_db.fetch_ready_hosts(
             count=self.__count, stage=self.__job_type
         )
-        if len(hosts) == 0:
+        if not hosts:
             return None
 
         # create the job directory
