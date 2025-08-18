@@ -42,6 +42,7 @@ from fabric.state import connections
 from fabric.tasks import Task, execute
 
 from cyhy.core import *
+from cyhy.core.common import DEFAULT_OWNER, SCAN_TYPE, STAGE
 from cyhy.db import CHDatabase, database
 from cyhy.util import setup_logging
 
