@@ -512,15 +512,28 @@ class Commander(object):
         return config
 
     def __setup_default_owner(self, scheduler):
-        # Check if request doc for default owner exists and if not, create it
-        #
-        # The default owner owns all "ownerless" HostDocs.  The default owner's
-        # RequestDoc does not have a valid list of networks (IP addresses), but
-        # it does have scan windows and concurrency settings.  Those "ownerless"
-        # HostDocs are created when a CyHy entity has a hostname that resolves
-        # to IP addresses that are not already owned by a CyHy entity.  This is
-        # how we account for cases where an entity owns a hostname, but not
-        # necessarily the IP addresses that it resolves to.
+        """
+        Ensures that a RequestDoc exists in the database for the default owner.
+
+        This function checks if a RequestDoc for the default owner exists, and
+        if not, creates one with default values.  This function also enables
+        scanning for the default owner and sets the scheduler as specified.  
+
+        The default owner owns all "ownerless" HostDocs.  The default owner's
+        RequestDoc does not have a valid list of networks (IP addresses), but it
+        does have scan windows and concurrency settings.  Those "ownerless"
+        HostDocs are created when a CyHy entity has a hostname that resolves to
+        IP addresses that are not already owned by a CyHy entity.  This is how
+        we account for cases where an entity owns a hostname, but not
+        necessarily the IP addresses that it resolves to.  
+
+        Args:
+            scheduler (str): The scheduler value to assign to the default
+            owner's RequestDoc.
+
+        Returns:
+            None
+        """
         if not self.__db.RequestDoc.get_by_owner(DEFAULT_OWNER):
             self.__logger.info("%s request document does not exist; creating..." % DEFAULT_OWNER)
             # Create a new request document populated with default values
