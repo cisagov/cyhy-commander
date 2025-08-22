@@ -512,8 +512,7 @@ class Commander(object):
         return config
 
     def __setup_default_owner(self, scheduler):
-        """
-        Ensures that a RequestDoc exists in the database for the default owner.
+        """Ensures that a RequestDoc exists in the database for the default owner.
 
         This function checks if a RequestDoc for the default owner exists, and
         if not, creates one with default values.  This function also enables
