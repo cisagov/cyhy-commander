@@ -149,9 +149,8 @@ class NmapImporter(object):
                     # If IP owner is known and is not the default owner, open a
                     # ticket
                     if (
-                        ip_owner != DEFAULT_OWNER
-                        and ip_owner != UNKNOWN_OWNER
-                        and ip_owner is not None
+                        ip_owner is not None
+                        and ip_owner not in [DEFAULT_OWNER, UNKNOWN_OWNER]
                     ):
                         report["source_id"] = RISKY_SERVICES_SOURCE_ID
                         report["name"] = "Potentially Risky Service Detected: {}".format(
