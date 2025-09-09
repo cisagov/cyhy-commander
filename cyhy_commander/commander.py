@@ -42,6 +42,7 @@ from fabric.state import connections
 from fabric.tasks import Task, execute
 
 from cyhy.core import *
+from cyhy.core.common import DEFAULT_OWNER, SCAN_TYPE, STAGE
 from cyhy.db import CHDatabase, database
 from cyhy.util import setup_logging
 
@@ -49,68 +50,69 @@ from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
 from job_source import DirectoryJobSource, DatabaseJobSource
 
 # fabric configuration
-env.use_ssh_config = True
-env.keepalive = 30
 env.command_timeout = 60
+env.keepalive = 30
+env.use_ssh_config = True
 
 # remote files
-RUNNING_DIR = "runner/running"
 DONE_DIR = "runner/done"
-READY_FILE = ".ready"
 DONE_FILE = ".done"
+READY_FILE = ".ready"
+RUNNING_DIR = "runner/running"
 
 # local files
-PUSHED_DIR = "pushed"
-SUCCESS_DIR = "done"
-FAILED_DIR = "failed"
-DROP_DIR = "drop"
-LOG_FILE = "/var/log/cyhy/commander.log"
 CONFIG_FILENAME = "/etc/cyhy/commander.conf"
-STOP_FILE = "stop"
-LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(name)s - %(message)s"
 DEFAULT_LOGGER_LEVEL = logging.INFO
+DROP_DIR = "drop"
+FAILED_DIR = "failed"
 LOCK_FILENAME = "cyhy-commander"
+LOG_FILE = "/var/log/cyhy/commander.log"
+LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(name)s - %(message)s"
+PUSHED_DIR = "pushed"
+STOP_FILE = "stop"
+SUCCESS_DIR = "done"
 
 # local job files
 me = os.path.realpath(__file__)
 myDir = os.path.dirname(me)
 jobsDir = os.path.join(myDir, "jobs")
+BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
 NETSCAN1_JOB_FILE = os.path.join(jobsDir, "netscan1.sh")
 NETSCAN2_JOB_FILE = os.path.join(jobsDir, "netscan2.sh")
 PORTSCAN_JOB_FILE = os.path.join(jobsDir, "portscan.sh")
-VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
-BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
 SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep.py")
+VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
 
 # config file
-DEFAULT = "DEFAULT"
-PRODUCTION_SECTION = "production"
-TESTING_SECTION = "testing"
-TESTING_PURGE_SECTION = "testing-purge"
-NMAP_HOSTS = "nmap-hosts"
-NESSUS_HOSTS = "nessus-hosts"
-JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
-JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
-POLL_INTERVAL = "poll-interval"
 DATABASE_NAME = "database-name"
 DATABASE_URI = "database-uri"
+DEFAULT = "DEFAULT"
+DEFAULT_SCHEDULER = "default-scheduler"
 DEFAULT_SECTION = "default-section"
-TEST_MODE = "test-mode"
+JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
+JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
 KEEP_FAILURES = "keep-failures"
 KEEP_SUCCESSES = "keep-successes"
-SHUTDOWN_WHEN_IDLE = "shutdown-when-idle"
+NESSUS_HOSTS = "nessus-hosts"
 NEXT_SCAN_LIMIT = "next-scan-limit"
+NMAP_HOSTS = "nmap-hosts"
+POLL_INTERVAL = "poll-interval"
+PRODUCTION_SECTION = "production"
+SHUTDOWN_WHEN_IDLE = "shutdown-when-idle"
+TEST_MODE = "test-mode"
+TESTING_PURGE_SECTION = "testing-purge"
+TESTING_SECTION = "testing"
 
 # TODO eventual config options
+IPS_PER_BASESCAN_JOB = 32
 IPS_PER_NETSCAN1_JOB = 128
 IPS_PER_NETSCAN2_JOB = 128 / 2
 IPS_PER_PORTSCAN_JOB = 32 / 4
 IPS_PER_VULNSCAN_JOB = 4
-IPS_PER_BASESCAN_JOB = 32
 RANDOMIZE_SOURCES = True
 
-NMAP_WORKGROUP = "nmap"
 NESSUS_WORKGROUP = "nessus"
+NMAP_WORKGROUP = "nmap"
 
 # The number of exceptions to allow before putting a host on "cooldown".
 #
@@ -129,24 +131,26 @@ COOLDOWN_DURATION = 60 * 30
 
 class Commander(object):
     def __init__(self, config_section=None, debug_logging=False, console_logging=False):
+        # Set up logging first in order to log any errors as soon as possible.
         self.__logger = logging.getLogger(__name__)
-        self.__config_section = config_section
-        self.__is_running = True
-        self.__all_hosts_idle = False
-        self.__next_scan_limit = 2000
         self.__setup_logging(debug_logging, console_logging)
-        self.__setup_directories()
-        self.__nmap_sources = []
-        self.__nessus_sources = []
-        self.__success_sinks = []
+
+        self.__all_hosts_idle = False
+        self.__config_section = config_section
+        self.__db = None
         self.__failure_sinks = []
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
-        self.__db = None
-        self.__test_mode = False
+        self.__is_running = True
         self.__keep_failures = False
         self.__keep_successes = False
+        self.__nessus_sources = []
+        self.__next_scan_limit = 2000
+        self.__nmap_sources = []
+        self.__setup_directories()
         self.__shutdown_when_idle = False
+        self.__success_sinks = []
+        self.__test_mode = False
 
     def __setup_logging(self, debug_logging, console_logging):
         # get default logging setup
@@ -479,7 +483,9 @@ class Commander(object):
         config.set(None, DEFAULT_SECTION, TESTING_SECTION)
         config.set(None, TEST_MODE, "false")
         config.set(None, KEEP_FAILURES, "false")
+        config.set(None, KEEP_SUCCESSES, "false")
         config.set(None, SHUTDOWN_WHEN_IDLE, "false")
+        config.set(None, DEFAULT_SCHEDULER, "PERSISTENT1")
         config.add_section(TESTING_SECTION)
         config.set(TESTING_SECTION, NMAP_HOSTS, "comma,separated,list")
         config.set(TESTING_SECTION, NESSUS_HOSTS, "comma,separated,list")
@@ -504,6 +510,44 @@ class Commander(object):
         config = SafeConfigParser()
         config.read([CONFIG_FILENAME])
         return config
+
+    def __setup_default_owner(self, scheduler):
+        """Ensures that a RequestDoc exists in the database for the default owner.
+
+        This function checks if a RequestDoc for the default owner exists, and
+        if not, creates one with default values.  This function also enables
+        scanning for the default owner and sets the scheduler as specified.  
+
+        The default owner owns all "ownerless" HostDocs.  The default owner's
+        RequestDoc does not have a valid list of networks (IP addresses), but it
+        does have scan windows and concurrency settings.  Those "ownerless"
+        HostDocs are created when a CyHy entity has a hostname that resolves to
+        IP addresses that are not already owned by a CyHy entity.  This is how
+        we account for cases where an entity owns a hostname, but not
+        necessarily the IP addresses that it resolves to.  
+
+        Args:
+            scheduler (str): The scheduler value to assign to the default
+            owner's RequestDoc.
+
+        Returns:
+            None
+        """
+        if not self.__db.RequestDoc.get_by_owner(DEFAULT_OWNER):
+            self.__logger.info("%s request document does not exist; creating..." % DEFAULT_OWNER)
+            # Create a new request document populated with default values
+            request = self.__db.RequestDoc()
+            # Customize request document for the default owner
+            request["_id"] = DEFAULT_OWNER
+            request["agency"]["acronym"] = DEFAULT_OWNER
+            request["agency"]["name"] = "Default CyHy system owner"
+            # Remove the location field; it is not required here
+            request["agency"].pop("location")
+            # Enable scanning for default owner
+            request["scan_types"] = [SCAN_TYPE.CYHY]
+            request["scheduler"] = scheduler
+            request.save()
+            self.__logger.info("%s request document created" % DEFAULT_OWNER)
 
     def do_work(self):
         env.warn_only = True
@@ -564,6 +608,10 @@ class Commander(object):
             config_section, SHUTDOWN_WHEN_IDLE
         )
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
+        self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
+        default_scheduler = config.get(config_section, DEFAULT_SCHEDULER)
+        self.__logger.info('Default scheduler: "%s"' % default_scheduler)
+        self.__setup_default_owner(default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
 

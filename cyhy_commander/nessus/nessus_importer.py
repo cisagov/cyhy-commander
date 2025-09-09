@@ -38,9 +38,9 @@ class NessusImporter(object):
         )
         self.__db = db
         self.__ch_db = CHDatabase(db)
+        self.current_host_owner = None
+        self.current_hostname = None
         self.current_ip = None
-        self.current_ip_int = None
-        self.current_ip_owner = None
         self.current_ip_time = None
         self.targets = None
         self.ticket_manager = VulnTicketManager(
@@ -77,11 +77,23 @@ class NessusImporter(object):
 
     def targets_callback(self, targets_string):
         """list of targets read from the policy section
-           clear latest flags, and change host state
-           this is done here since all target do not necessarily
-           generate reports and host callbacks"""
+        clear latest flags, and change host state
+        this is done here since not all targets necessarily
+        generate reports and host callbacks"""
         targets = targets_string.split(",")
-        self.targets = netaddr.IPSet(netaddr.IPAddress(i) for i in targets)
+        self.targets = netaddr.IPSet()
+        for t in targets:
+            # If any targets are a hostname and an IP addresss (e.g.
+            # "foo.gov[192.168.1.1]"), extract the IP address.
+            #
+            # This could be done via regex, but I don't think there's any
+            # benefit that justifies the additional import.  If the target is
+            # malformed (e.g. something other than a valid IP in the brackets,
+            # no closing bracket, etc.), casting to an IPAddress will fail
+            # regardless of how we parse it.
+            if "[" in t:
+                t = t.strip().split("[")[1][:-1]
+            self.targets.add(netaddr.IPAddress(t))
         self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
         self.ticket_manager.ips = self.targets
         self.__try_to_clear_latest_flags()
@@ -124,19 +136,62 @@ class NessusImporter(object):
                     % parsedHost["name"]
                 )
                 return
-
         parsedHost["ip"] = self.current_ip
-        self.current_ip_int = int(self.current_ip)
-        self.current_ip_owner = self.__db.HostDoc.get_owner_of_ip(self.current_ip_int)
+
+        # Try to determine the hostname and owner
+        self.current_hostname = None
+        self.current_host_owner = None
+        host_doc = self.__db.HostDoc.get_by_ip(self.current_ip)
+        if host_doc and host_doc.get("hostnames"):
+            # First, check if there is a HostDoc with a hostname that matches
+            # the parsedHost["name"].
+            for h in host_doc["hostnames"]:
+                if h["hostname"] == parsedHost["name"]:
+                    self.current_hostname = h["hostname"]
+                    self.current_host_owner = h.get("owner")
+                    break
+            # If we haven't set the hostname yet, check if there is a HostDoc
+            # hostname that matches parsedHost["host_fqdn"].
+            if not self.current_hostname:
+                for h in host_doc["hostnames"]:
+                    if h["hostname"] == parsedHost.get("host_fqdn"):
+                        self.current_hostname = h["hostname"]
+                        self.current_host_owner = h.get("owner")
+                        break
+
+        # If we still haven't set the hostname, check if parsedHost["host_fqdn"]
+        # matches the parsedHost["name"], and use that.  We can't trust
+        # parsedHost["name"] alone, since that can contain the IP address or
+        # some other user-supplied string.
+        if not self.current_hostname and (
+            parsedHost.get("host_fqdn") == parsedHost["name"]
+        ):
+            self.current_hostname = parsedHost["host_fqdn"]
+        
+        # If we haven't set the host owner by now and we have a HostDoc, set the
+        # current_host_owner to the HostDoc owner.
+        if not self.current_host_owner and host_doc:
+            self.current_host_owner = host_doc.get("owner")
+
         if not self.manual_scan:
             # only change the time if we are not doing a manual scan import
             self.current_ip_time = parsedHost["end_time"]
-        if self.current_ip_owner is None:
-            self.current_ip_owner = UNKNOWN_OWNER
-            self.__logger.warning(
-                "Could not find owner for %s (%d)"
-                % (self.current_ip, self.current_ip_int)
-            )
+        if self.current_host_owner is None:
+            self.current_host_owner = UNKNOWN_OWNER
+            if self.current_hostname:
+                self.__logger.warning(
+                    "Could not find owner for %s - %s (%d)"
+                    % (
+                        self.current_hostname,
+                        self.current_ip,
+                        int(self.current_ip),
+                    )
+                )
+            else:
+                self.__logger.warning(
+                    "Could not find owner for %s (%d)"
+                    % (self.current_ip, int(self.current_ip))
+                )
 
         # Nessus host docs are not stored as we already have better data from nmap
 
@@ -153,10 +208,11 @@ class NessusImporter(object):
         report = self.__db.VulnScanDoc()
         util.copy_attrs(parsedReport, report)
 
-        report["source"] = NessusImporter.SOURCE
         report.ip = self.current_ip  # sets ip and ip_int
-        report["owner"] = self.current_ip_owner
+        report["hostname"] = self.current_hostname
         report["latest"] = True
+        report["owner"] = self.current_host_owner
+        report["source"] = NessusImporter.SOURCE
         report["time"] = self.current_ip_time
 
         try:
@@ -180,11 +236,11 @@ class NessusImporter(object):
                 'Reached end of Nessus import but did not clear "latest" flags'
             )
             self.__logger.warning(
-                "Ticket manager state counts: %d ips, %d ports, %d plugin_ids"
+                "Ticket manager state counts: %d ips, %d ports, %d source_ids"
                 % (
-                    self.ticket_manager.ips,
-                    self.ticket_manager.ports,
-                    self.ticket_manager.plugin_ids,
+                    len(self.ticket_manager.ips),
+                    len(self.ticket_manager.ports),
+                    len(self.ticket_manager.source_ids),
                 )
             )
         else:

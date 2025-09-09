@@ -3,9 +3,9 @@ from setuptools import setup, find_packages
 
 setup(
     name="cyhy-commander",
-    version="0.0.2",
+    version="1.0.0",
     author="Mark Feldhousen Jr.",
-    author_email="mark.feldhousen@trio.dhs.gov",
+    author_email="mark.feldhousen@cisa.dhs.gov",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
@@ -19,7 +19,7 @@ setup(
     description="Command and control application for Cyber Hygiene",
     # long_description=open('README.txt').read(),
     install_requires=[
-        "cyhy-core >= 0.0.2",
+        "cyhy-core >= 1.0.0",
         "Fabric >= 1.8.3, < 2.0.0",
         "docopt >= 0.6.2",
         "python-daemon == 2.3.0",

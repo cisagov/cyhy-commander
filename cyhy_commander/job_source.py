@@ -1,8 +1,6 @@
 import os
 import shutil
 import tempfile
-import datetime
-import logging
 
 from cyhy.core import *
 from cyhy.db import CHDatabase
@@ -64,9 +62,11 @@ class DatabaseJobSource(JobSource):
         if not self.__db.HostDoc.exists(self.__job_type, STATUS.READY):
             return None
 
-        # actual attempt to claim ips
-        ips = self.__ch_db.fetch_ready_hosts(count=self.__count, stage=self.__job_type)
-        if len(ips) == 0:
+        # actual attempt to claim hosts
+        hosts = self.__ch_db.fetch_ready_hosts(
+            count=self.__count, stage=self.__job_type
+        )
+        if not hosts:
             return None
 
         # create the job directory
@@ -83,12 +83,25 @@ class DatabaseJobSource(JobSource):
         target_file_name = "%s.txt" % dir_name
         target_path = os.path.join(job_path, target_file_name)
         target_file = open(target_path, "w")
-        for ip in ips:
-            print >> target_file, ip
+
+        # vulnerability scans may include hostnames
+        if self.__job_type == STAGE.VULNSCAN:
+            for host in hosts:
+                # include all hostnames if present, otherwise use IP alone
+                if host.get("hostnames"):
+                    for h in host["hostnames"]:
+                        print >> target_file, "%s[%s]" % (h["hostname"], host["ip"])
+                else:
+                    print >> target_file, host["ip"]
+        else:
+            for host in hosts:
+                print >> target_file, host["ip"]
+
         target_file.close()
 
         # vulnerability scans require a port list file
         if self.__job_type == STAGE.VULNSCAN:
+            ips = [host["ip"] for host in hosts]
             ports = self.__ch_db.get_open_ports(ips)
             ports_string = util.list_to_range_string(ports)
             ports_path = os.path.join(job_path, PORTS_FILE_NAME)
