@@ -438,13 +438,13 @@ class Commander(object):
         while self.__is_running:
             try:
                 # check the successful jobs queue
-                job_path = self.__successful_job_queue.get()
+                job_path = self.__successful_job_queue.get(timeout=1)
                 self.__process_successful_job(job_path)
                 self.__successful_job_queue.task_done()
             except Queue.Empty:
                 # check the failed jobs queue
                 try:
-                    job_path = self.__failed_job_queue.get()
+                    job_path = self.__failed_job_queue.get(timeout=1)
                     self.__process_failed_job(job_path)
                     self.__failed_job_queue.task_done()
                 except Queue.Empty:
