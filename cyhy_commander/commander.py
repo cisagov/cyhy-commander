@@ -24,6 +24,7 @@ Options:
 from collections import defaultdict
 import logging
 import os
+import Queue
 import random
 import shutil
 import signal
@@ -139,6 +140,8 @@ class Commander(object):
         self.__config_section = config_section
         self.__db = None
         self.__failure_sinks = []
+        self.__successful_job_queue = None
+        self.__failed_job_queue = None
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
         self.__is_running = True
@@ -617,6 +620,9 @@ class Commander(object):
         self.__setup_sources()
         self.__setup_sinks()
 
+        self.__successful_job_queue = Queue.Queue()
+        self.__failed_job_queue = Queue.Queue()
+
         # pairs of hosts and job sources
         work_groups = (
             (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
@@ -710,6 +716,10 @@ class Commander(object):
                     if hosts == None:
                         continue
                     execute(self.__done_jobs, self, hosts=hosts)
+
+                # wait for work to process
+                self.__successful_job_queue.join()
+                self.__failed_job_queue.join()
 
                 # check for scheduled hosts
                 self.__logger.debug(
