@@ -434,8 +434,12 @@ class Commander(object):
             counts[lowest_host] += 1
 
     def __process_queued_jobs(self):
-        # run as long as the commander is running
-        while self.__is_running:
+        # run as long as the commander is running or the queues are not empty
+        while (
+            self.__is_running
+            or not self.__successful_job_queue.empty()
+            or not self.__failed_job_queue.empty()
+        ):
             try:
                 # check the successful jobs queue
                 job_path = self.__successful_job_queue.get(timeout=1)
