@@ -452,28 +452,42 @@ class Commander(object):
                     time.sleep(10)
 
     def __process_successful_job(self, job_path):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         for sink in self.__success_sinks:
             if sink.can_handle(job_path):
-                self.__logger.info("Processing %s with %s" % (job_path, sink))
+                self.__logger.info(
+                    "[%s] Processing %s with %s" % (thread_name, job_path, sink)
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed")
+                self.__logger.info("[%s] Processing completed" % thread_name)
                 if not self.__test_mode and not self.__keep_successes:
                     shutil.rmtree(job_path)
-                    self.__logger.info("%s deleted" % job_path)
+                    self.__logger.info("[%s] %s deleted" % (thread_name, job_path))
                 return
-        self.__logger.warning("No handler was able to process %s" % job_path)
+        self.__logger.warning(
+            "[%s] No handler was able to process %s" % (thread_name, job_path)
+        )
 
     def __process_failed_job(self, job_path):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         for sink in self.__failure_sinks:
             if sink.can_handle(job_path):
-                self.__logger.warning("Processing %s with %s" % (job_path, sink))
+                self.__logger.warning(
+                    "[%s] Processing %s with %s" % (thread_name, job_path, sink)
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed")
+                self.__logger.info("[%s] Processing completed" % thread_name)
                 if not self.__test_mode and not self.__keep_failures:
                     shutil.rmtree(job_path)
-                    self.__logger.info("%s deleted" % job_path)
+                    self.__logger.info("[%s] %s deleted" % (thread_name, job_path))
                 return
-        self.__logger.warning("No handler was able to process %s" % job_path)
+        self.__logger.warning(
+            "[%s] No handler was able to process %s" % (thread_name, job_path)
+        )
 
     def handle_term(self, signal, frame):
         self.__logger.warning(
