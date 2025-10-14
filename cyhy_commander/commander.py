@@ -29,6 +29,7 @@ import random
 import shutil
 import signal
 import sys
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
@@ -90,6 +91,7 @@ DATABASE_URI = "database-uri"
 DEFAULT = "DEFAULT"
 DEFAULT_SCHEDULER = "default-scheduler"
 DEFAULT_SECTION = "default-section"
+JOB_PROCESSING_THREADS = "job-processing-threads"
 JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
 JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
 KEEP_FAILURES = "keep-failures"
@@ -308,9 +310,9 @@ class Commander(object):
                     local_job_path = os.path.join(destDir, job)
 
                     if destDir == SUCCESS_DIR:
-                        self.__process_successful_job(local_job_path)
+                        self.__successful_job_queue.put(local_job_path)
                     else:
-                        self.__process_failed_job(local_job_path)
+                        self.__failed_job_queue.put(local_job_path)
 
                 else:
                     self.__logger.warning(
@@ -431,6 +433,24 @@ class Commander(object):
             execute(self.__push_job, self, job_path, hosts=[lowest_host])
             counts[lowest_host] += 1
 
+    def __process_queued_jobs(self):
+        # run as long as the commander is running
+        while self.__is_running:
+            try:
+                # check the successful jobs queue
+                job_path = self.__successful_job_queue.get()
+                self.__process_successful_job(job_path)
+                self.__successful_job_queue.task_done()
+            except Queue.Empty:
+                # check the failed jobs queue
+                try:
+                    job_path = self.__failed_job_queue.get()
+                    self.__process_failed_job(job_path)
+                    self.__failed_job_queue.task_done()
+                except Queue.Empty:
+                    # sleep if both queues are empty
+                    time.sleep(10)
+
     def __process_successful_job(self, job_path):
         for sink in self.__success_sinks:
             if sink.can_handle(job_path):
@@ -481,6 +501,7 @@ class Commander(object):
         config.set(None, DATABASE_URI, "mongodb://localhost:27017/")
         config.set(None, JOBS_PER_NMAP_HOST, "8")
         config.set(None, JOBS_PER_NESSUS_HOST, "8")
+        config.set(None, JOB_PROCESSING_THREADS, "4")
         config.set(None, POLL_INTERVAL, "30")
         config.set(None, NEXT_SCAN_LIMIT, "2000")
         config.set(None, DEFAULT_SECTION, TESTING_SECTION)
@@ -623,6 +644,20 @@ class Commander(object):
         self.__successful_job_queue = Queue.Queue()
         self.__failed_job_queue = Queue.Queue()
 
+        # spin up the thread pool to process retrieved work
+        job_processing_threads = []
+        job_processing_thread_count = config.getint(
+            config_section, JOB_PROCESSING_THREADS
+        )
+        for t in range(job_processing_thread_count):
+            try:
+                job_processing_thread = threading.Thread(
+                    target=self.__process_queued_jobs
+                )
+                job_processing_threads.append(job_processing_thread)
+                job_processing_thread.start()
+            except Exception:
+                self.__logger.error("Unable to start job processing thread #%s", t)
         # pairs of hosts and job sources
         work_groups = (
             (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
@@ -762,6 +797,11 @@ class Commander(object):
             except Exception, e:
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
+
+        # wait for the job processing threads to exit
+        for job_processing_thread in job_processing_threads:
+            job_processing_thread.join()
+
         self.__logger.info("Shutting down.")
         disconnect_all()
 
