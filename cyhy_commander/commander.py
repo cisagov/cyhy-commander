@@ -674,8 +674,10 @@ class Commander(object):
                 )
                 job_processing_threads.append(job_processing_thread)
                 job_processing_thread.start()
-            except Exception:
+            except Exception as e:
                 self.__logger.error("Unable to start job processing thread #%s", t)
+                self.__logger.error(e)
+
         # pairs of hosts and job sources
         work_groups = (
             (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
