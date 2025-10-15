@@ -645,6 +645,12 @@ class Commander(object):
         self.__test_mode = config.getboolean(config_section, TEST_MODE)
         self.__logger.info("Test mode: %s", self.__test_mode)
         self.__keep_failures = config.getboolean(config_section, KEEP_FAILURES)
+        job_processing_thread_count = config.getint(
+            config_section, JOB_PROCESSING_THREADS
+        )
+        self.__logger.info(
+            "Number of job processing threads: %d", job_processing_thread_count
+        )
         self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
         self.__keep_successes = config.getboolean(config_section, KEEP_SUCCESSES)
         self.__logger.info("Keep successful jobs: %s", self.__keep_successes)
@@ -664,9 +670,6 @@ class Commander(object):
 
         # spin up the thread pool to process retrieved work
         job_processing_threads = []
-        job_processing_thread_count = config.getint(
-            config_section, JOB_PROCESSING_THREADS
-        )
         for t in range(job_processing_thread_count):
             try:
                 job_processing_thread = threading.Thread(
