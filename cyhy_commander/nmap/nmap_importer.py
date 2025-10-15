@@ -128,7 +128,9 @@ class NmapImporter(object):
                     report.save()
                     if details.get("service", {}).get("name") in RISKY_SERVICES:
                         report["source_id"] = RISKY_SERVICES_SOURCE_ID
-                        report["name"] = "Potentially Risky Service Detected: {}".format(
+                        report[
+                            "name"
+                        ] = "Potentially Risky Service Detected: {}".format(
                             details["service"]["name"]
                         )
                         report["service"] = details["service"]["name"]
@@ -148,12 +150,14 @@ class NmapImporter(object):
                 if details.get("service", {}).get("name") in RISKY_SERVICES:
                     # If IP owner is known and is not the default owner, open a
                     # ticket
-                    if (
-                        ip_owner is not None
-                        and ip_owner not in [DEFAULT_OWNER, UNKNOWN_OWNER]
-                    ):
+                    if ip_owner is not None and ip_owner not in [
+                        DEFAULT_OWNER,
+                        UNKNOWN_OWNER,
+                    ]:
                         report["source_id"] = RISKY_SERVICES_SOURCE_ID
-                        report["name"] = "Potentially Risky Service Detected: {}".format(
+                        report[
+                            "name"
+                        ] = "Potentially Risky Service Detected: {}".format(
                             details["service"]["name"]
                         )
                         report["service"] = details["service"]["name"]

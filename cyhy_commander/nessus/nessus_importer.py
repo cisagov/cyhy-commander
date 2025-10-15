@@ -167,7 +167,7 @@ class NessusImporter(object):
             parsedHost.get("host_fqdn") == parsedHost["name"]
         ):
             self.current_hostname = parsedHost["host_fqdn"]
-        
+
         # If we haven't set the host owner by now and we have a HostDoc, set the
         # current_host_owner to the HostDoc owner.
         if not self.current_host_owner and host_doc:
