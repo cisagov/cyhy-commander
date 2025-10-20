@@ -95,5 +95,16 @@ class TryAgainSink(object):
         target_file = glob.glob(target_glob)[0]
         with open(target_file) as f:
             for ip_line in f:
+                # It's possible that the target file contains hostnames, so
+                # check if any targets are a hostname and an IP address (e.g.
+                # "foo.gov[192.168.1.1]"), and if so, extract the IP address.
+                #
+                # This could be done via regex, but I don't think there's any
+                # benefit that justifies the additional import.  If the target
+                # is malformed (e.g. something other than a valid IP in the
+                # brackets, no closing bracket, etc.), casting to an IPAddress
+                # will fail regardless of how we parse it.
+                if "[" in ip_line:
+                    ip_line = ip_line.strip().split("[")[1][:-1]
                 ip = netaddr.IPAddress(ip_line)
                 self.__ch_db.transition_host(ip, was_failure=True)
