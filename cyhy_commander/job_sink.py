@@ -97,6 +97,10 @@ class TryAgainSink(object):
         target_file = glob.glob(target_glob)[0]
         with open(target_file) as f:
             for ip_line in f:
+                # TODO: Create a helper function for this logic since it's
+                # duplicated in multiple places now.  See issue #18 for more
+                # details.
+                #
                 # It's possible that the target file contains hostnames, so
                 # check if any targets are a hostname and an IP address (e.g.
                 # "foo.gov[192.168.1.1]"), and if so, extract the IP address.

@@ -83,6 +83,10 @@ class NessusImporter(object):
         targets = targets_string.split(",")
         self.targets = netaddr.IPSet()
         for t in targets:
+            # TODO: Create a helper function for this logic since it's
+            # duplicated in multiple places now.  See issue #18 for more
+            # details.
+            #
             # If any targets are a hostname and an IP address (e.g.
             # "foo.gov[192.168.1.1]"), extract the IP address.
             #
