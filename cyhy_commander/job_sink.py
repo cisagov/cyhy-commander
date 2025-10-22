@@ -1,5 +1,6 @@
 import os
 import glob
+import logging
 import random
 from cyhy.core import *
 from cyhy.db import CHDatabase
@@ -83,6 +84,7 @@ class TryAgainSink(object):
     def __init__(self, db):
         self.__db = db
         self.__ch_db = CHDatabase(db)
+        self.__logger = logging.getLogger(__name__)
 
     def __str__(self):
         return "<TryAgainSink %s>" % (self.__ch_db)
@@ -95,5 +97,29 @@ class TryAgainSink(object):
         target_file = glob.glob(target_glob)[0]
         with open(target_file) as f:
             for ip_line in f:
+                # TODO: Create a helper function for this logic since it's
+                # duplicated in multiple places now.  See issue #18 for more
+                # details.
+                #
+                # It's possible that the target file contains hostnames, so
+                # check if any targets are a hostname and an IP address (e.g.
+                # "foo.gov[192.168.1.1]"), and if so, extract the IP address.
+                #
+                # This could be done via regex, but I don't think there's any
+                # benefit that justifies the additional import.  Note that if
+                # something other than a valid is IP in the brackets, casting to
+                # an IPAddress will fail regardless of how we parse it.
+                if "[" in ip_line:
+                    parts = ip_line.strip().split("[")
+                    if len(parts) == 2 and parts[1].endswith("]"):
+                        ip_line = parts[1][:-1]
+                    else:
+                        self.__logger.warning(
+                            "Skipping malformed target '%s' in job %s" % (
+                                ip_line.strip(),
+                                job_path
+                            )
+                        )
+                        continue
                 ip = netaddr.IPAddress(ip_line)
                 self.__ch_db.transition_host(ip, was_failure=True)
