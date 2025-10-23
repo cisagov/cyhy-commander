@@ -19,8 +19,8 @@ class NmapContentHandler(ContentHandler):
         self.taskStartTime = None
         self.taskEndTime = None
         self.first_osmatch_done_for_host = (
-            False
-        )  # only capture the first osmatch element
+            False  # only capture the first osmatch element
+        )
 
     def startElement(self, name, attrs):
         # clear characters buffer
