@@ -440,18 +440,38 @@ class Commander(object):
             or not self.__successful_job_queue.empty()
             or not self.__failed_job_queue.empty()
         ):
+            job_path = None
+
+            # check the successful jobs queue
             try:
-                # check the successful jobs queue
                 job_path = self.__successful_job_queue.get(timeout=1)
-                self.__process_successful_job(job_path)
-                self.__successful_job_queue.task_done()
             except Queue.Empty:
+                pass
+
+            # process successful job
+            if job_path is not None:
+                try:
+                    self.__process_successful_job(job_path)
+                    self.__successful_job_queue.task_done()
+                except Exception, e:
+                    self.__logger.critical(e)
+                    self.__logger.critical(traceback.format_exc())
+            else:
                 # check the failed jobs queue
                 try:
                     job_path = self.__failed_job_queue.get(timeout=1)
-                    self.__process_failed_job(job_path)
-                    self.__failed_job_queue.task_done()
                 except Queue.Empty:
+                    pass
+
+                # process failed job
+                if job_path is not None:
+                    try:
+                        self.__process_failed_job(job_path)
+                        self.__failed_job_queue.task_done()
+                    except Exception, e:
+                        self.__logger.critical(e)
+                        self.__logger.critical(traceback.format_exc())
+                else:
                     # sleep if both queues are empty
                     time.sleep(10)
 
