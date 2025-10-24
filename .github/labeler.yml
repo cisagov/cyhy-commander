@@ -12,6 +12,10 @@ ansible:
   - changed-files:
       - any-glob-to-any-file:
           - "**/ansible/**"
+cyhy-runner jobs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - cyhy_commander/jobs/**
 dependencies:
   - changed-files:
       - any-glob-to-any-file:

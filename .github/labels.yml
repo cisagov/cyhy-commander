@@ -68,6 +68,9 @@
 - color: ef476c
   description: This issue is a request for information or needs discussion
   name: question
+- color: 067790
+  description: Pull requests that update cyhy-runner jobs
+  name: cyhy-runner jobs
 - color: d73a4a
   description: This issue or pull request addresses a security issue
   name: security
