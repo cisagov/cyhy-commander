@@ -115,10 +115,8 @@ class TryAgainSink(object):
                         ip_line = parts[1][:-1]
                     else:
                         self.__logger.warning(
-                            "Skipping malformed target '%s' in job %s" % (
-                                ip_line.strip(),
-                                job_path
-                            )
+                            "Skipping malformed target '%s' in job %s"
+                            % (ip_line.strip(), job_path)
                         )
                         continue
                 ip = netaddr.IPAddress(ip_line)

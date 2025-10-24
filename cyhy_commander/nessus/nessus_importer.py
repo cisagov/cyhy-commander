@@ -99,9 +99,7 @@ class NessusImporter(object):
                 if len(parts) == 2 and parts[1].endswith("]"):
                     t = parts[1][:-1]
                 else:
-                    self.__logger.warning(
-                        "Skipping malformed target: '%s'" % t.strip()
-                    )
+                    self.__logger.warning("Skipping malformed target: '%s'" % t.strip())
                     continue
             self.targets.add(netaddr.IPAddress(t))
         self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
