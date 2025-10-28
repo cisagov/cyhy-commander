@@ -89,7 +89,7 @@ jobs:
           # trigger.
           ref: ${{ github.head_ref }}
       - name: Blacken project
-        uses: cisagov/action-blacken-python2@482be061341ecfdfdee0ba78e27556d77aadd26d
+        uses: cisagov/action-blacken-python2@v1
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
