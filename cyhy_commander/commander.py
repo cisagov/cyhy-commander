@@ -700,6 +700,9 @@ class Commander(object):
             except Exception as e:
                 self.__logger.error("Unable to start job processing thread #%s", t)
                 self.__logger.error(e)
+                # bail out
+                self.__logger.critical("Shutting down due to inability to start threads.")
+                self.__is_running = False
 
         # pairs of hosts and job sources
         work_groups = (
