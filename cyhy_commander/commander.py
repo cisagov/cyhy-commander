@@ -473,7 +473,7 @@ class Commander(object):
                         self.__logger.critical(traceback.format_exc())
                 else:
                     # sleep if both queues are empty
-                    time.sleep(10)
+                    time.sleep(1)
 
     def __process_successful_job(self, job_path):
         # Get the name of the current thread
