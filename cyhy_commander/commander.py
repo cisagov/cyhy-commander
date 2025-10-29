@@ -701,7 +701,9 @@ class Commander(object):
                 self.__logger.error("Unable to start job processing thread #%s", t)
                 self.__logger.error(e)
                 # bail out
-                self.__logger.critical("Shutting down due to inability to start threads.")
+                self.__logger.critical(
+                    "Shutting down due to inability to start threads."
+                )
                 self.__is_running = False
 
         # pairs of hosts and job sources
