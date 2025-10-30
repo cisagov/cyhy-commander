@@ -807,6 +807,7 @@ class Commander(object):
                     execute(self.__done_jobs, self, hosts=hosts)
 
                 # wait for work to process
+                self.__logger.debug("Waiting for completed jobs to be processed.")
                 self.__successful_job_queue.join()
                 self.__failed_job_queue.join()
 
