@@ -444,7 +444,7 @@ class Commander(object):
             self.__logger.debug(
                 "%d jobs in the failed job queue" % self.__failed_job_queue.qsize()
             )
-            sleep(10)
+            time.sleep(10)
 
     def __process_queued_jobs(self):
         # run as long as the commander is processing jobs or the queues are not empty
