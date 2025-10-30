@@ -147,8 +147,10 @@ class Commander(object):
         self.__hosts_on_cooldown = []
         self.__is_processing_jobs = True
         self.__is_running = True
+        self.__job_processing_sleep_duration = 1
         self.__keep_failures = False
         self.__keep_successes = False
+        self.__log_output_sleep_duration = 10
         self.__nessus_sources = []
         self.__next_scan_limit = 2000
         self.__nmap_sources = []
@@ -444,7 +446,7 @@ class Commander(object):
             self.__logger.debug(
                 "%d jobs in the failed job queue" % self.__failed_job_queue.qsize()
             )
-            time.sleep(10)
+            time.sleep(self.__log_output_sleep_duration)
 
     def __process_queued_jobs(self):
         # run as long as the commander is processing jobs or the queues are not empty
@@ -491,7 +493,7 @@ class Commander(object):
                         self.__logger.critical(traceback.format_exc())
                 else:
                     # sleep if both queues are empty
-                    time.sleep(1)
+                    time.sleep(self.__job_processing_sleep_duration)
 
     def __process_successful_job(self, job_path):
         # Get the name of the current thread
@@ -549,7 +551,7 @@ class Commander(object):
     def __check_database_pause(self):
         while self.__ch_db.should_commander_pause() and self.__is_running:
             self.__logger.info("Commander is paused due to database request.")
-            time.sleep(10)
+            time.sleep(self.__log_output_sleep_duration)
             self.__check_stop_file()
 
     def __write_config(self):
