@@ -146,6 +146,7 @@ class Commander(object):
         self.__failed_job_queue = None
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
+        self.__is_processing_jobs = True
         self.__is_running = True
         self.__keep_failures = False
         self.__keep_successes = False
@@ -434,9 +435,14 @@ class Commander(object):
             counts[lowest_host] += 1
 
     def __process_queued_jobs(self):
-        # run as long as the commander is running or the queues are not empty
+        # run as long as the commander is processing jobs or the queues are not empty
+        #
+        # There is a race condition inherent to using Queue.empty() in a loop because
+        # items can be added after Queue.empty() has already returned True. We can
+        # safely ignore this because no work will be added to the queues after
+        # self.__is_processing_jobs is set to False.
         while (
-            self.__is_running
+            self.__is_processing_jobs
             or not self.__successful_job_queue.empty()
             or not self.__failed_job_queue.empty()
         ):
@@ -845,6 +851,10 @@ class Commander(object):
             except Exception, e:
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
+
+        # signal job processing threads to exit once they have finished all
+        # queued work
+        self.__is_processing_jobs = False
 
         # wait for the job processing threads to exit
         for job_processing_thread in job_processing_threads:
