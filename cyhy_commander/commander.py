@@ -434,6 +434,18 @@ class Commander(object):
             execute(self.__push_job, self, job_path, hosts=[lowest_host])
             counts[lowest_host] += 1
 
+    def __monitor_job_queues(self):
+        # output the approximate amount of work on each of the queues every 10 seconds
+        while self.__is_processing_jobs:
+            self.__logger.debug(
+                "%d jobs in the successful job queue"
+                % self.__successful_job_queue.qsize()
+            )
+            self.__logger.debug(
+                "%d jobs in the failed job queue" % self.__failed_job_queue.qsize()
+            )
+            sleep(10)
+
     def __process_queued_jobs(self):
         # run as long as the commander is processing jobs or the queues are not empty
         #
@@ -712,6 +724,19 @@ class Commander(object):
                 )
                 self.__is_running = False
 
+        # spin up a thread to output queue load information
+        try:
+            job_queue_monitor_thread = threading.Thread(
+                target=self.__monitor_job_queues
+            )
+            job_queue_monitor_thread.start()
+        except Exception as e:
+            self.__logger.error("Unable to start job queue monitoring thread")
+            self.__logger.error(e)
+            # bail out
+            self.__logger.critical("Shutting down due to inability to start threads")
+            self.__is_running = False
+
         # pairs of hosts and job sources
         work_groups = (
             (NMAP_WORKGROUP, nmap_hosts, self.__nmap_sources, jobs_per_nmap_host),
@@ -860,6 +885,9 @@ class Commander(object):
         # wait for the job processing threads to exit
         for job_processing_thread in job_processing_threads:
             job_processing_thread.join()
+
+        # wait for the job queue monitoring thread to exit
+        job_queue_monitor_thread.join()
 
         self.__logger.info("Shutting down.")
         disconnect_all()
