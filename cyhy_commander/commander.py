@@ -709,7 +709,9 @@ class Commander(object):
         # spin up the thread pool to process retrieved work
         job_processing_threads = []
         for t in range(job_processing_thread_count):
-            job_processing_thread = threading.Thread(target=self.__process_queued_jobs)
+            job_processing_thread = threading.Thread(
+                name="JobProcessor-%d" % t, target=self.__process_queued_jobs
+            )
             job_processing_threads.append(job_processing_thread)
             try:
                 job_processing_thread.start()
@@ -723,7 +725,9 @@ class Commander(object):
                 self.__is_running = False
 
         # spin up a thread to output queue load information
-        job_queue_monitor_thread = threading.Thread(target=self.__monitor_job_queues)
+        job_queue_monitor_thread = threading.Thread(
+            name="QueueMonitor", target=self.__monitor_job_queues
+        )
         try:
             job_queue_monitor_thread.start()
         except Exception as e:
