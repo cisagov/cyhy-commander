@@ -718,7 +718,7 @@ class Commander(object):
                 self.__logger.error(e)
                 # bail out
                 self.__logger.critical(
-                    "Shutting down due to inability to start threads."
+                    "Shutting down due to inability to start job processing threads."
                 )
                 self.__is_running = False
 
@@ -730,7 +730,7 @@ class Commander(object):
             self.__logger.error("Unable to start job queue monitoring thread")
             self.__logger.error(e)
             # bail out
-            self.__logger.critical("Shutting down due to inability to start threads.")
+            self.__logger.critical("Shutting down due to inability to start queue monitoring thread.")
             self.__is_running = False
 
         # pairs of hosts and job sources
