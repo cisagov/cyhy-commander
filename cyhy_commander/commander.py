@@ -141,9 +141,8 @@ class Commander(object):
         self.__all_hosts_idle = False
         self.__config_section = config_section
         self.__db = None
-        self.__failure_sinks = []
-        self.__successful_job_queue = None
         self.__failed_job_queue = None
+        self.__failure_sinks = []
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
         self.__is_processing_jobs = True
@@ -156,6 +155,7 @@ class Commander(object):
         self.__setup_directories()
         self.__shutdown_when_idle = False
         self.__success_sinks = []
+        self.__successful_job_queue = None
         self.__test_mode = False
 
     def __setup_logging(self, debug_logging, console_logging):
