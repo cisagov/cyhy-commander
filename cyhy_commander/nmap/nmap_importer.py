@@ -99,7 +99,8 @@ class NmapImporter(object):
         if host_doc:
             ip_owner = host_doc.get("owner", UNKNOWN_OWNER)
         else:
-            ip_owner = None
+            self.__logger.warning("No HostDoc found for IP %s" % str(ip))
+            ip_owner = UNKNOWN_OWNER
         for (port, details) in parsed_host["ports"].items():
             if details["state"] != "open":  # only storing open ports
                 continue
