@@ -472,10 +472,12 @@ class Commander(object):
             if job_path is not None:
                 try:
                     self.__process_successful_job(job_path)
-                    self.__successful_job_queue.task_done()
                 except Exception, e:
                     self.__logger.critical(e)
                     self.__logger.critical(traceback.format_exc())
+
+                # report task completion no matter what so the queue can be joined
+                self.__successful_job_queue.task_done()
             else:
                 # check the failed jobs queue
                 try:
@@ -487,10 +489,12 @@ class Commander(object):
                 if job_path is not None:
                     try:
                         self.__process_failed_job(job_path)
-                        self.__failed_job_queue.task_done()
                     except Exception, e:
                         self.__logger.critical(e)
                         self.__logger.critical(traceback.format_exc())
+
+                    # report task completion no matter what so the queue can be joined
+                    self.__failed_job_queue.task_done()
                 else:
                     # sleep if both queues are empty
                     time.sleep(self.__job_processing_sleep_duration)
