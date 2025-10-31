@@ -440,11 +440,12 @@ class Commander(object):
         # output the approximate amount of work on each of the queues every 10 seconds
         while self.__is_processing_jobs:
             self.__logger.debug(
-                "%d jobs in the successful job queue"
-                % self.__successful_job_queue.qsize()
+                "%d unfinished jobs in the successful job queue"
+                % self.__successful_job_queue.unfinished_tasks
             )
             self.__logger.debug(
-                "%d jobs in the failed job queue" % self.__failed_job_queue.qsize()
+                "%d unfinished jobs in the failed job queue"
+                % self.__failed_job_queue.unfinished_tasks
             )
             time.sleep(self.__log_output_sleep_duration)
 
