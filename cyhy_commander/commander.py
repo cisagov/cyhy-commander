@@ -154,6 +154,7 @@ class Commander(object):
         self.__nessus_sources = []
         self.__next_scan_limit = 2000
         self.__nmap_sources = []
+        self.__queue_monitor_output_lock = threading.Lock()
         self.__setup_directories()
         self.__shutdown_when_idle = False
         self.__success_sinks = []
@@ -439,14 +440,15 @@ class Commander(object):
     def __monitor_job_queues(self):
         # output the approximate amount of work on each of the queues every 10 seconds
         while self.__is_processing_jobs:
-            self.__logger.debug(
-                "%d unfinished jobs in the successful job queue"
-                % self.__successful_job_queue.unfinished_tasks
-            )
-            self.__logger.debug(
-                "%d unfinished jobs in the failed job queue"
-                % self.__failed_job_queue.unfinished_tasks
-            )
+            with self.__queue_monitor_output_lock:
+                self.__logger.debug(
+                    "%d unfinished jobs in the successful job queue"
+                    % self.__successful_job_queue.unfinished_tasks
+                )
+                self.__logger.debug(
+                    "%d unfinished jobs in the failed job queue"
+                    % self.__failed_job_queue.unfinished_tasks
+                )
             time.sleep(self.__log_output_sleep_duration)
 
     def __process_queued_jobs(self):
@@ -732,6 +734,7 @@ class Commander(object):
                 self.__is_running = False
 
         # spin up a thread to output queue load information
+        self.__queue_monitor_output_lock.acquire()
         job_queue_monitor_thread = threading.Thread(
             name="QueueMonitor", target=self.__monitor_job_queues
         )
@@ -835,6 +838,7 @@ class Commander(object):
                 self.__logger.debug(
                     "Checking remotes for completed jobs to download and process"
                 )
+                self.__queue_monitor_output_lock.release()
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
@@ -844,6 +848,7 @@ class Commander(object):
                 self.__logger.debug("Waiting for completed jobs to be processed.")
                 self.__successful_job_queue.join()
                 self.__failed_job_queue.join()
+                self.__queue_monitor_output_lock.acquire()
 
                 # check for scheduled hosts
                 self.__logger.debug(
@@ -890,6 +895,7 @@ class Commander(object):
         # signal job processing threads to exit once they have finished all
         # queued work
         self.__is_processing_jobs = False
+        self.__queue_monitor_output_lock.release()
 
         # wait for the job processing threads to exit
         for job_processing_thread in job_processing_threads:
