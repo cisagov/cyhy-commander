@@ -480,9 +480,9 @@ class Commander(object):
                 self.__logger.critical(traceback.format_exc())
 
             # report task completion no matter what so the queue can be joined
-            target_queue.task_done()
+            target_job_queue.task_done()
 
-            # return job processing duration
+            # return path of the job that was processed
             return job_path
 
         # run as long as the commander is processing jobs
