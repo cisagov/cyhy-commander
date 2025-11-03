@@ -452,17 +452,8 @@ class Commander(object):
             time.sleep(self.__log_output_sleep_duration)
 
     def __process_queued_jobs(self):
-        # run as long as the commander is processing jobs or the queues are not empty
-        #
-        # There is a race condition inherent to using Queue.empty() in a loop because
-        # items can be added after Queue.empty() has already returned True. We can
-        # safely ignore this because no work will be added to the queues after
-        # self.__is_processing_jobs is set to False.
-        while (
-            self.__is_processing_jobs
-            or not self.__successful_job_queue.empty()
-            or not self.__failed_job_queue.empty()
-        ):
+        # run as long as the commander is processing jobs
+        while self.__is_processing_jobs:
             job_path = None
 
             # check the successful jobs queue
