@@ -452,46 +452,54 @@ class Commander(object):
             time.sleep(self.__log_output_sleep_duration)
 
     def __process_queued_jobs(self):
-        # run as long as the commander is processing jobs
-        while self.__is_processing_jobs:
+
+        # define an inner function to process jobs
+        def process_job_from_queue(target_job_queue, job_processing_function):
+            """Helper function to process jobs from a queue.
+
+            Args:
+                target_job_queue (Queue.Queue): The queue to get a job to process.
+                job_processing_function (callable): The function used to process a job.
+
+            Returns:
+                The job path that was processed or None if the queue was empty.
+            """
             job_path = None
 
             # check the successful jobs queue
             try:
-                job_path = self.__successful_job_queue.get(timeout=1)
+                job_path = target_job_queue.get(timeout=1)
             except Queue.Empty:
-                pass
+                return job_path
 
+            try:
+                job_processing_function(job_path)
+            except Exception, e:
+                self.__logger.critical(e)
+                self.__logger.critical(traceback.format_exc())
+
+            # report task completion no matter what so the queue can be joined
+            target_queue.task_done()
+
+            # return job processing duration
+            return job_path
+
+        # run as long as the commander is processing jobs
+        while self.__is_processing_jobs:
             # process successful job
-            if job_path is not None:
-                try:
-                    self.__process_successful_job(job_path)
-                except Exception, e:
-                    self.__logger.critical(e)
-                    self.__logger.critical(traceback.format_exc())
+            job_processing_results = process_job_from_queue(
+                self.__successful_job_queue, self.__process_successful_job
+            )
 
-                # report task completion no matter what so the queue can be joined
-                self.__successful_job_queue.task_done()
-            else:
-                # check the failed jobs queue
-                try:
-                    job_path = self.__failed_job_queue.get(timeout=1)
-                except Queue.Empty:
-                    pass
+            # process failed job if a successful job was not processed
+            if job_processing_results is None:
+                job_processing_results = process_job_from_queue(
+                    self.__failed_job_queue, self.__process_failed_job
+                )
 
-                # process failed job
-                if job_path is not None:
-                    try:
-                        self.__process_failed_job(job_path)
-                    except Exception, e:
-                        self.__logger.critical(e)
-                        self.__logger.critical(traceback.format_exc())
-
-                    # report task completion no matter what so the queue can be joined
-                    self.__failed_job_queue.task_done()
-                else:
-                    # sleep if both queues are empty
-                    time.sleep(self.__job_processing_sleep_duration)
+            # sleep if both queues are empty
+            if job_processing_results is None:
+                time.sleep(self.__job_processing_sleep_duration)
 
     def __process_successful_job(self, job_path):
         # Get the name of the current thread
