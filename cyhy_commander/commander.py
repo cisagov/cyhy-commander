@@ -438,7 +438,8 @@ class Commander(object):
             counts[lowest_host] += 1
 
     def __monitor_job_queues(self):
-        # output the approximate amount of work on each of the queues every 10 seconds
+        # Output the number of jobs that are not done for each queue every
+        # self.__log_output_sleep_duration seconds while work is on the queues.
         while self.__is_processing_jobs:
             with self.__queue_monitor_output_lock:
                 self.__logger.debug(
