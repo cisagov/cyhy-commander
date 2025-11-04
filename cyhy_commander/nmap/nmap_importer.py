@@ -79,6 +79,12 @@ class NmapImporter(object):
 
     def process(self, nmap_filename, target_filename):
         """Imports nmap files created from netscans and portscans"""
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
+        self.__logger.debug(
+            "[%s] Starting processing of %s" % (thread_name, nmap_filename)
+        )
         # import target ips
         ips = netaddr.IPSet()
         with open(target_filename) as f:
@@ -239,6 +245,9 @@ class NmapImporter(object):
         self.__ch_db.transition_host(ip, has_open_ports=has_at_least_one_open_port)
 
     def __end_callback(self):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # clear the latest flags compiled from __netscan_host_callback down
         self.__db.HostScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         self.__db.PortScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
@@ -246,3 +255,5 @@ class NmapImporter(object):
         # tell the ticket manager to close what needs to be closed
         self.__ticket_manager.close_tickets()
         self.__ticket_manager.clear_vuln_latest_flags()
+
+        self.__logger.debug("[%s] Reached end of Nmap import" % thread_name)
