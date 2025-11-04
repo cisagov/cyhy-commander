@@ -249,10 +249,15 @@ class NmapImporter(object):
         thread_name = threading.current_thread().name
 
         # clear the latest flags compiled from __netscan_host_callback down
+        self.__logger.debug(
+            "[%s] Resetting latest flag for %d IPs"
+            % (thread_name, len(self.__ips_to_reset_latest))
+        )
         self.__db.HostScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         self.__db.PortScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         self.__db.VulnScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         # tell the ticket manager to close what needs to be closed
+        self.__logger.debug("[%s] Closing tickets" % thread_name)
         self.__ticket_manager.close_tickets()
         self.__ticket_manager.clear_vuln_latest_flags()
 
