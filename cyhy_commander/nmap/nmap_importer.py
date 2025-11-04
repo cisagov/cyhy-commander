@@ -2,6 +2,7 @@
 
 # built-in python libraries
 import logging
+import threading
 from xml.sax import parse
 
 # third-party libraries (install with pip)
@@ -93,13 +94,18 @@ class NmapImporter(object):
         f.close()
 
     def __store_port_details(self, parsed_host):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         has_at_least_one_open_port = False
         ip = parsed_host["addr"]
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc:
             ip_owner = host_doc.get("owner", UNKNOWN_OWNER)
         else:
-            self.__logger.warning("No HostDoc found for IP %s" % str(ip))
+            self.__logger.warning(
+                "[%s] No HostDoc found for IP %s" % (thread_name, str(ip))
+            )
             ip_owner = UNKNOWN_OWNER
         for (port, details) in parsed_host["ports"].items():
             if details["state"] != "open":  # only storing open ports
