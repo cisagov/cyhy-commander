@@ -90,6 +90,10 @@ class NmapImporter(object):
         with open(target_filename) as f:
             for ip_line in f:
                 self.__ticket_manager.ips.add(ip_line)
+        self.__logger.debug(
+            "[%s] Found %d targets in target file %s"
+            % (thread_name, len(__ticket_manager.ips), target_filename)
+        )
         # parse nmap data
         f = open(nmap_filename, "rb")
         # sometimes the first line of the nmap output is not xml
@@ -131,6 +135,10 @@ class NmapImporter(object):
             details["latest"] = True
 
             if host_doc and host_doc.get("hostnames"):
+                self.__logger.debug(
+                    "[%s] Creating PortScanDocs for %d hostnames"
+                    % (thread_name, len(host_doc["hostnames"]))
+                )
                 # Create a PortScanDoc for each hostname/owner combination
                 for h in host_doc["hostnames"]:
                     report = self.__db.PortScanDoc()
@@ -180,6 +188,9 @@ class NmapImporter(object):
         return has_at_least_one_open_port
 
     def __store_os_details(self, parsed_host):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         details = dict()
         if parsed_host.has_key("os"):
             util.copy_attrs(parsed_host["os"], details)
@@ -195,6 +206,10 @@ class NmapImporter(object):
         ip = parsed_host["addr"]
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc and host_doc.get("hostnames"):
+            self.__logger.debug(
+                "[%s] Creating HostScanDocs for %d hostnames"
+                % (thread_name, len(host_doc["hostnames"]))
+            )
             # Create a HostScanDoc for each hostname/owner combination
             for h in host_doc["hostnames"]:
                 host = self.__db.HostScanDoc()
