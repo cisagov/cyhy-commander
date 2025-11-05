@@ -17,6 +17,9 @@
 - color: 07648d
   description: This issue will be advertised on code.gov's Open Tasks page (https://code.gov/open-tasks)
   name: code.gov
+- color: 067790
+  description: Pull requests that update cyhy-runner jobs
+  name: cyhy-runner jobs
 - color: 0366d6
   description: Pull requests that update a dependency file
   name: dependencies
@@ -68,9 +71,6 @@
 - color: ef476c
   description: This issue is a request for information or needs discussion
   name: question
-- color: 067790
-  description: Pull requests that update cyhy-runner jobs
-  name: cyhy-runner jobs
 - color: d73a4a
   description: This issue or pull request addresses a security issue
   name: security
