@@ -760,6 +760,20 @@ class Commander(object):
             ),
         )
 
+        # clear out retrieved but unprocessed work
+        self.__logger.debug("Process any leftover local jobs")
+        self.__queue_monitor_output_lock.release()
+        for target_dir, target_queue in (
+            (SUCCESS_DIR, self.__successful_job_queue),
+            (FAILED_DIR, self.__failed_job_queue),
+        ):
+            for job in os.listdir(target_dir):
+                target_queue.put(os.path.join(target_dir, job))
+        self.__successful_job_queue.join()
+        self.__failed_job_queue.join()
+        self.__queue_monitor_output_lock.acquire()
+        self.__logger.debug("Finished processing leftover jobs")
+
         # main work loop
         while self.__is_running:
             try:
