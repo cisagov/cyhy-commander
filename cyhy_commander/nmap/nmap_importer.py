@@ -117,6 +117,11 @@ class NmapImporter(object):
                 "[%s] No HostDoc found for IP %s" % (thread_name, str(ip))
             )
             ip_owner = UNKNOWN_OWNER
+
+        self.__logger.debug(
+            "[%s] Processing %d port results for IP %s"
+            % (thread_name, len(parsed_host["ports"]), str(ip))
+        )
         for (port, details) in parsed_host["ports"].items():
             if details["state"] != "open":  # only storing open ports
                 continue
@@ -135,10 +140,6 @@ class NmapImporter(object):
             details["latest"] = True
 
             if host_doc and host_doc.get("hostnames"):
-                self.__logger.debug(
-                    "[%s] Creating PortScanDocs for %d hostnames"
-                    % (thread_name, len(host_doc["hostnames"]))
-                )
                 # Create a PortScanDoc for each hostname/owner combination
                 for h in host_doc["hostnames"]:
                     report = self.__db.PortScanDoc()
@@ -204,11 +205,13 @@ class NmapImporter(object):
         details["latest"] = True
 
         ip = parsed_host["addr"]
+        self.__logger.debug("[%s] Storing OS details for IP %s", (thread_name, str(ip)))
+
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc and host_doc.get("hostnames"):
             self.__logger.debug(
-                "[%s] Creating HostScanDocs for %d hostnames"
-                % (thread_name, len(host_doc["hostnames"]))
+                "[%s] HostDoc for IP %s has %d hostnames"
+                % (thread_name, str(ip), len(host_doc["hostnames"]))
             )
             # Create a HostScanDoc for each hostname/owner combination
             for h in host_doc["hostnames"]:
@@ -274,6 +277,9 @@ class NmapImporter(object):
         # tell the ticket manager to close what needs to be closed
         self.__logger.debug("[%s] Closing tickets" % thread_name)
         self.__ticket_manager.close_tickets()
+        self.__logger.debug(
+            "[%s] Clear the latest flag for applicable VulnScanDocs" % thread_name
+        )
         self.__ticket_manager.clear_vuln_latest_flags()
 
         self.__logger.debug("[%s] Reached end of Nmap import" % thread_name)
