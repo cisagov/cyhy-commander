@@ -205,7 +205,9 @@ class NmapImporter(object):
         details["latest"] = True
 
         ip = parsed_host["addr"]
-        self.__logger.debug("[%s] Storing OS details for IP %s" % (thread_name, str(ip)))
+        self.__logger.debug(
+            "[%s] Storing OS details for IP %s" % (thread_name, str(ip))
+        )
 
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc and host_doc.get("hostnames"):
