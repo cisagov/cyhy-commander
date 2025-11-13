@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="cyhy-commander",
-    version="1.0.2",
+    version="1.1.0",
     author="Mark Feldhousen Jr.",
     author_email="mark.feldhousen@cisa.dhs.gov",
     packages=find_packages(),

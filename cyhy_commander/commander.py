@@ -909,7 +909,7 @@ class Commander(object):
 
 
 def main():
-    args = docopt(__doc__, version="v1.0.2")
+    args = docopt(__doc__, version="v1.1.0")
     workingDir = os.path.join(os.getcwd(), args["<working-dir>"])
     if not os.path.exists(workingDir):
         print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % workingDir
