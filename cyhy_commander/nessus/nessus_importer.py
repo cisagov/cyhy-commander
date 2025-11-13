@@ -6,6 +6,7 @@ from bson.errors import InvalidDocument
 import netaddr
 import gzip
 import logging
+import threading
 from cyhy.core import UNKNOWN_OWNER
 from cyhy.db import CHDatabase, VulnTicketManager
 from cyhy.util import util
@@ -50,7 +51,10 @@ class NessusImporter(object):
         self.manual_scan = manual_scan
 
     def process(self, filename, gzipped=False):
-        self.__logger.debug("Starting processing of %s" % filename)
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
+        self.__logger.debug("[%s] Starting processing of %s" % (thread_name, filename))
         if self.manual_scan:
             # if we are doing a manual scan import we have to assume a current time
             self.current_ip_time = util.utcnow()
@@ -62,20 +66,28 @@ class NessusImporter(object):
         f.close()
 
     def __try_to_clear_latest_flags(self):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # Once the ticket manager has all its information,
         # it can clear the previous latest flags
         if self.ticket_manager.ready_to_clear_vuln_latest_flags():
             self.__logger.debug(
-                'Ticket manager IS READY to clear VulnScan "latest" flags'
+                '[%s] Ticket manager IS READY to clear VulnScan "latest" flags'
+                % thread_name
             )
             self.ticket_manager.clear_vuln_latest_flags()
             self.attempted_to_clear_latest_flags = True
         else:
             self.__logger.debug(
-                'Ticket manager IS NOT READY to clear VulnScan "latest" flags'
+                '[%s] Ticket manager IS NOT READY to clear VulnScan "latest" flags'
+                % thread_name
             )
 
     def targets_callback(self, targets_string):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         """list of targets read from the policy section
         clear latest flags, and change host state
         this is done here since not all targets necessarily
@@ -99,35 +111,53 @@ class NessusImporter(object):
                 if len(parts) == 2 and parts[1].endswith("]"):
                     t = parts[1][:-1]
                 else:
-                    self.__logger.warning("Skipping malformed target: '%s'" % t.strip())
+                    self.__logger.warning(
+                        "[%s] Skipping malformed target: '%s'"
+                        % (thread_name, t.strip())
+                    )
                     continue
             self.targets.add(netaddr.IPAddress(t))
-        self.__logger.debug("Found %d targets in Nessus file" % len(self.targets))
+        self.__logger.debug(
+            "[%s] Found %d targets in Nessus file" % (thread_name, len(self.targets))
+        )
         self.ticket_manager.ips = self.targets
         self.__try_to_clear_latest_flags()
 
     def plugin_set_callback(self, plugin_set_string):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         string_list = plugin_set_string.split(";")
         if (
             string_list[-1] == ""
         ):  # this list ends with a ; creating a non-int empty string
             string_list.pop()
         plugin_set = set(int(s) for s in string_list)
-        self.__logger.debug("Found %d plugin_ids in Nessus file" % len(plugin_set))
+        self.__logger.debug(
+            "[%s] Found %d plugin_ids in Nessus file" % (thread_name, len(plugin_set))
+        )
         self.ticket_manager.source_ids = plugin_set
         self.__try_to_clear_latest_flags()
 
     def port_range_callback(self, port_range_string):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # The base policy port range was used
         if port_range_string == "default":
             # Match the base policy value found in /extras/policy.xml
             port_range_string = "1-65535"
         ports = set(util.range_string_to_list(port_range_string))
-        self.__logger.debug("Found %d ports in Nessus file" % len(ports))
+        self.__logger.debug(
+            "[%s] Found %d ports in Nessus file" % (thread_name, len(ports))
+        )
         self.ticket_manager.ports = ports
         self.__try_to_clear_latest_flags()
 
     def host_callback(self, parsedHost):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # some fragile hosts don't list their host_ip
         # fallback to name
         if parsedHost.has_key("host_ip"):
@@ -140,8 +170,8 @@ class NessusImporter(object):
                 # When parsedHost['name'] is not a valid IP (see CYHY-113 in Jira)
                 self.current_ip = None
                 self.__logger.warning(
-                    "Skipping vulnerability reports; invalid host IP detected: %s"
-                    % parsedHost["name"]
+                    "[%s] Skipping vulnerability reports; invalid host IP detected: %s"
+                    % (thread_name, parsedHost["name"])
                 )
                 return
         parsedHost["ip"] = self.current_ip
@@ -188,8 +218,9 @@ class NessusImporter(object):
             self.current_host_owner = UNKNOWN_OWNER
             if self.current_hostname:
                 self.__logger.warning(
-                    "Could not find owner for %s - %s (%d)"
+                    "[%s] Could not find owner for %s - %s (%d)"
                     % (
+                        thread_name,
                         self.current_hostname,
                         self.current_ip,
                         int(self.current_ip),
@@ -197,20 +228,23 @@ class NessusImporter(object):
                 )
             else:
                 self.__logger.warning(
-                    "Could not find owner for %s (%d)"
-                    % (self.current_ip, int(self.current_ip))
+                    "[%s] Could not find owner for %s (%d)"
+                    % (thread_name, self.current_ip, int(self.current_ip))
                 )
 
         # Nessus host docs are not stored as we already have better data from nmap
 
     def report_callback(self, parsedReport):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # not storing severity 0 reports or reports with invalid IPs
         if parsedReport["severity"] == 0:
             return
         if self.current_ip is None:
             self.__logger.warning(
-                "No current IP; skipping vulnerability report: %s"
-                % parsedReport["plugin_name"]
+                "[%s] No current IP; skipping vulnerability report: %s"
+                % (thread_name, parsedReport["plugin_name"])
             )
             return
         report = self.__db.VulnScanDoc()
@@ -231,6 +265,9 @@ class NessusImporter(object):
         self.ticket_manager.open_ticket(report, "vulnerability detected")
 
     def end_callback(self):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         for ip in self.targets:
             if self.manual_scan:
                 # update host priority and reschedule host
@@ -241,11 +278,13 @@ class NessusImporter(object):
         self.ticket_manager.close_tickets()
         if not self.attempted_to_clear_latest_flags:
             self.__logger.warning(
-                'Reached end of Nessus import but did not clear "latest" flags'
+                '[%s] Reached end of Nessus import but did not clear "latest" flags'
+                % thread_name
             )
             self.__logger.warning(
-                "Ticket manager state counts: %d ips, %d ports, %d source_ids"
+                "[%s] Ticket manager state counts: %d ips, %d ports, %d source_ids"
                 % (
+                    thread_name,
                     len(self.ticket_manager.ips),
                     len(self.ticket_manager.ports),
                     len(self.ticket_manager.source_ids),
@@ -253,5 +292,6 @@ class NessusImporter(object):
             )
         else:
             self.__logger.debug(
-                "Reached end of Nessus import, VulnScan latest flags were cleared."
+                "[%s] Reached end of Nessus import, VulnScan latest flags were cleared."
+                % thread_name
             )

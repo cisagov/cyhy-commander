@@ -24,10 +24,12 @@ Options:
 from collections import defaultdict
 import logging
 import os
+import Queue
 import random
 import shutil
 import signal
 import sys
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
@@ -89,6 +91,7 @@ DATABASE_URI = "database-uri"
 DEFAULT = "DEFAULT"
 DEFAULT_SCHEDULER = "default-scheduler"
 DEFAULT_SECTION = "default-section"
+JOB_PROCESSING_THREADS = "job-processing-threads"
 JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
 JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
 KEEP_FAILURES = "keep-failures"
@@ -138,18 +141,24 @@ class Commander(object):
         self.__all_hosts_idle = False
         self.__config_section = config_section
         self.__db = None
+        self.__failed_job_queue = None
         self.__failure_sinks = []
         self.__host_exceptions = defaultdict(lambda: 0)
         self.__hosts_on_cooldown = []
+        self.__is_processing_jobs = True
         self.__is_running = True
+        self.__job_processing_sleep_duration = 1
         self.__keep_failures = False
         self.__keep_successes = False
+        self.__log_output_sleep_duration = 10
         self.__nessus_sources = []
         self.__next_scan_limit = 2000
         self.__nmap_sources = []
+        self.__queue_monitor_output_lock = threading.Lock()
         self.__setup_directories()
         self.__shutdown_when_idle = False
         self.__success_sinks = []
+        self.__successful_job_queue = None
         self.__test_mode = False
 
     def __setup_logging(self, debug_logging, console_logging):
@@ -305,9 +314,9 @@ class Commander(object):
                     local_job_path = os.path.join(destDir, job)
 
                     if destDir == SUCCESS_DIR:
-                        self.__process_successful_job(local_job_path)
+                        self.__successful_job_queue.put(local_job_path)
                     else:
-                        self.__process_failed_job(local_job_path)
+                        self.__failed_job_queue.put(local_job_path)
 
                 else:
                     self.__logger.warning(
@@ -428,29 +437,108 @@ class Commander(object):
             execute(self.__push_job, self, job_path, hosts=[lowest_host])
             counts[lowest_host] += 1
 
+    def __monitor_job_queues(self):
+        # Output the number of jobs that are not done for each queue every
+        # self.__log_output_sleep_duration seconds while work is on the queues.
+        while self.__is_processing_jobs:
+            with self.__queue_monitor_output_lock:
+                self.__logger.debug(
+                    "%d unfinished jobs in the successful job queue"
+                    % self.__successful_job_queue.unfinished_tasks
+                )
+                self.__logger.debug(
+                    "%d unfinished jobs in the failed job queue"
+                    % self.__failed_job_queue.unfinished_tasks
+                )
+            time.sleep(self.__log_output_sleep_duration)
+
+    def __process_queued_jobs(self):
+
+        # define an inner function to process jobs
+        def process_job_from_queue(target_job_queue, job_processing_function):
+            """Helper function to process jobs from a queue.
+
+            Args:
+                target_job_queue (Queue.Queue): The queue to get a job to process.
+                job_processing_function (callable): The function used to process a job.
+
+            Returns:
+                The job path that was processed or None if the queue was empty.
+            """
+            job_path = None
+
+            # check the successful jobs queue
+            try:
+                job_path = target_job_queue.get(timeout=1)
+            except Queue.Empty:
+                return job_path
+
+            try:
+                job_processing_function(job_path)
+            except Exception, e:
+                self.__logger.critical(e)
+                self.__logger.critical(traceback.format_exc())
+
+            # report task completion no matter what so the queue can be joined
+            target_job_queue.task_done()
+
+            # return path of the job that was processed
+            return job_path
+
+        # run as long as the commander is processing jobs
+        while self.__is_processing_jobs:
+            # process successful job
+            job_processing_results = process_job_from_queue(
+                self.__successful_job_queue, self.__process_successful_job
+            )
+
+            # process failed job if a successful job was not processed
+            if job_processing_results is None:
+                job_processing_results = process_job_from_queue(
+                    self.__failed_job_queue, self.__process_failed_job
+                )
+
+            # sleep if both queues are empty
+            if job_processing_results is None:
+                time.sleep(self.__job_processing_sleep_duration)
+
     def __process_successful_job(self, job_path):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         for sink in self.__success_sinks:
             if sink.can_handle(job_path):
-                self.__logger.info("Processing %s with %s" % (job_path, sink))
+                self.__logger.info(
+                    "[%s] Processing %s with %s" % (thread_name, job_path, sink)
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed")
+                self.__logger.info("[%s] Processing completed" % thread_name)
                 if not self.__test_mode and not self.__keep_successes:
                     shutil.rmtree(job_path)
-                    self.__logger.info("%s deleted" % job_path)
+                    self.__logger.info("[%s] %s deleted" % (thread_name, job_path))
                 return
-        self.__logger.warning("No handler was able to process %s" % job_path)
+        self.__logger.warning(
+            "[%s] No handler was able to process %s" % (thread_name, job_path)
+        )
 
     def __process_failed_job(self, job_path):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         for sink in self.__failure_sinks:
             if sink.can_handle(job_path):
-                self.__logger.warning("Processing %s with %s" % (job_path, sink))
+                self.__logger.warning(
+                    "[%s] Processing %s with %s" % (thread_name, job_path, sink)
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed")
+                self.__logger.info("[%s] Processing completed" % thread_name)
                 if not self.__test_mode and not self.__keep_failures:
                     shutil.rmtree(job_path)
-                    self.__logger.info("%s deleted" % job_path)
+                    self.__logger.info("[%s] %s deleted" % (thread_name, job_path))
                 return
-        self.__logger.warning("No handler was able to process %s" % job_path)
+        self.__logger.warning(
+            "[%s] No handler was able to process %s" % (thread_name, job_path)
+        )
 
     def handle_term(self, signal, frame):
         self.__logger.warning(
@@ -470,7 +558,7 @@ class Commander(object):
     def __check_database_pause(self):
         while self.__ch_db.should_commander_pause() and self.__is_running:
             self.__logger.info("Commander is paused due to database request.")
-            time.sleep(10)
+            time.sleep(self.__log_output_sleep_duration)
             self.__check_stop_file()
 
     def __write_config(self):
@@ -478,6 +566,7 @@ class Commander(object):
         config.set(None, DATABASE_URI, "mongodb://localhost:27017/")
         config.set(None, JOBS_PER_NMAP_HOST, "8")
         config.set(None, JOBS_PER_NESSUS_HOST, "8")
+        config.set(None, JOB_PROCESSING_THREADS, "4")
         config.set(None, POLL_INTERVAL, "30")
         config.set(None, NEXT_SCAN_LIMIT, "2000")
         config.set(None, DEFAULT_SECTION, TESTING_SECTION)
@@ -603,6 +692,12 @@ class Commander(object):
         self.__test_mode = config.getboolean(config_section, TEST_MODE)
         self.__logger.info("Test mode: %s", self.__test_mode)
         self.__keep_failures = config.getboolean(config_section, KEEP_FAILURES)
+        job_processing_thread_count = config.getint(
+            config_section, JOB_PROCESSING_THREADS
+        )
+        self.__logger.info(
+            "Number of job processing threads: %d", job_processing_thread_count
+        )
         self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
         self.__keep_successes = config.getboolean(config_section, KEEP_SUCCESSES)
         self.__logger.info("Keep successful jobs: %s", self.__keep_successes)
@@ -616,6 +711,43 @@ class Commander(object):
         self.__setup_default_owner(default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
+
+        self.__successful_job_queue = Queue.Queue()
+        self.__failed_job_queue = Queue.Queue()
+
+        # spin up the thread pool to process retrieved work
+        job_processing_threads = []
+        for t in range(job_processing_thread_count):
+            job_processing_thread = threading.Thread(
+                name="JobProcessor-%d" % t, target=self.__process_queued_jobs
+            )
+            job_processing_threads.append(job_processing_thread)
+            try:
+                job_processing_thread.start()
+            except Exception as e:
+                self.__logger.error("Unable to start job processing thread #%s", t)
+                self.__logger.error(e)
+                # bail out
+                self.__logger.critical(
+                    "Shutting down due to inability to start job processing threads."
+                )
+                self.__is_running = False
+
+        # spin up a thread to output queue load information
+        self.__queue_monitor_output_lock.acquire()
+        job_queue_monitor_thread = threading.Thread(
+            name="QueueMonitor", target=self.__monitor_job_queues
+        )
+        try:
+            job_queue_monitor_thread.start()
+        except Exception as e:
+            self.__logger.error("Unable to start job queue monitoring thread")
+            self.__logger.error(e)
+            # bail out
+            self.__logger.critical(
+                "Shutting down due to inability to start queue monitoring thread."
+            )
+            self.__is_running = False
 
         # pairs of hosts and job sources
         work_groups = (
@@ -706,10 +838,17 @@ class Commander(object):
                 self.__logger.debug(
                     "Checking remotes for completed jobs to download and process"
                 )
+                self.__queue_monitor_output_lock.release()
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
                     execute(self.__done_jobs, self, hosts=hosts)
+
+                # wait for work to process
+                self.__logger.debug("Waiting for completed jobs to be processed.")
+                self.__successful_job_queue.join()
+                self.__failed_job_queue.join()
+                self.__queue_monitor_output_lock.acquire()
 
                 # check for scheduled hosts
                 self.__logger.debug(
@@ -752,12 +891,25 @@ class Commander(object):
             except Exception, e:
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
+
+        # signal job processing threads to exit once they have finished all
+        # queued work
+        self.__is_processing_jobs = False
+        self.__queue_monitor_output_lock.release()
+
+        # wait for the job processing threads to exit
+        for job_processing_thread in job_processing_threads:
+            job_processing_thread.join()
+
+        # wait for the job queue monitoring thread to exit
+        job_queue_monitor_thread.join()
+
         self.__logger.info("Shutting down.")
         disconnect_all()
 
 
 def main():
-    args = docopt(__doc__, version="v1.0.2")
+    args = docopt(__doc__, version="v1.1.0")
     workingDir = os.path.join(os.getcwd(), args["<working-dir>"])
     if not os.path.exists(workingDir):
         print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % workingDir
