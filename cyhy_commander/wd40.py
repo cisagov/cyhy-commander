@@ -15,7 +15,7 @@ Options:
 """
 
 # Standard Python Libraries
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 import logging
 import pytz
 
@@ -42,7 +42,7 @@ def main():
     section = args["--section"]
     try:
         db = database.db_from_config(section, config)
-    except:
+    except Exception:
         logging.critical(
             "Unable to connect to the database server in section %s of %s",
             section,
