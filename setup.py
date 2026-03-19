@@ -13,6 +13,7 @@ setup(
         "console_scripts": [
             "cyhy-commander=cyhy_commander.commander:main",
             "cyhy-nessus-import=cyhy_commander.nessus_import_tool:main",
+            "cyhy-wd40=cyhy_commander.wd40:main",
         ]
     },
     # license='LICENSE.txt',
