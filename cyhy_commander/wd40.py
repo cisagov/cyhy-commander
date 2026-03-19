@@ -52,7 +52,9 @@ def main():
         return 1
 
     # Today's date at midnight UTC
-    date_today = datetime.combine(datetime.now(pytz.timezone("UTC")), time.min)
+    date_today = datetime.utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.timezone("UTC")
+    )
     stuck_cutoff = date_today - timedelta(days=int(args["--days"]))
 
     logging.info(
