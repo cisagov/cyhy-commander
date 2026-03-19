@@ -76,9 +76,15 @@ def main():
     logging.info(
         "Updating the host docs by setting their status to %s.", STATUS.WAITING
     )
-    db.hosts.updateMany(
+    result = db.hosts.update_many(
         {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
         {"$set": {"status": STATUS.WAITING}},
+    )
+    logging.info(
+        "Updated %d host documents from %s to %s.",
+        result.modified_count,
+        STATUS.RUNNING,
+        STATUS.WAITING,
     )
 
     logging.info("Syncing tallies for all affected owners.")
@@ -90,13 +96,3 @@ def main():
                 "No existing tally doc found for %s.  Creating a new one.", owner
             )
             tally = db.TallyDoc()
-    result = db.hosts.update_many(
-        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
-        {"$set": {"status": STATUS.WAITING}},
-    )
-    logging.info(
-        "Updated %d host documents from %s to %s.",
-        result.modified_count,
-        STATUS.RUNNING,
-        STATUS.WAITING,
-    )
