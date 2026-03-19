@@ -87,7 +87,8 @@ def main():
     )
 
     logging.info(
-        "Updating the host docs with stuck scans by setting their status to %s.", STATUS.WAITING
+        "Updating the host docs with stuck scans by setting their status to %s.",
+        STATUS.WAITING,
     )
     result = db.hosts.update_many(
         {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
