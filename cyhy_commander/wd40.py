@@ -80,7 +80,11 @@ def main():
     for host in hosts_cursor:
         owners.add(host["owner"])
         host_count += 1
-    logging.info("%d unique owners found in %d host documents with stuck scans", len(owners), host_count)
+    logging.info(
+        "%d unique owners found in %d host documents with stuck scans",
+        len(owners),
+        host_count,
+    )
 
     logging.info(
         "Updating the host docs by setting their status to %s.", STATUS.WAITING
