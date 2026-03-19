@@ -55,7 +55,15 @@ def main():
     date_today = datetime.utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.timezone("UTC")
     )
-    stuck_cutoff = date_today - timedelta(days=int(args["--days"]))
+    try:
+        days = int(args["--days"])
+    except (TypeError, ValueError):
+        logging.critical(
+            "Invalid value for --days (%r); it must be an integer.",
+            args["--days"],
+        )
+        return 1
+    stuck_cutoff = date_today - timedelta(days=days)
 
     logging.info(
         "Querying for all host docs in the %s state that have not been updated since %s.",
