@@ -76,6 +76,13 @@ def main():
         if tally is None:
             logging.warning("No existing tally doc found for %s.  Creating a new one.", owner)
             tally = db.TallyDoc()
-            tally["_id"] = owner
-        logging.debug("Syncing tally for %s.", owner)
-        tally.sync(db)
+    result = db.hosts.update_many(
+        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
+        {"$set": {"status": STATUS.WAITING}},
+    )
+    logging.info(
+        "Updated %d host documents from %s to %s.",
+        result.modified_count,
+        STATUS.RUNNING,
+        STATUS.WAITING,
+    )
