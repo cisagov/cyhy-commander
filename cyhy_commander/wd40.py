@@ -44,19 +44,26 @@ def main():
         db = database.db_from_config(section, config)
     except:
         logging.critical(
-            "Unable to connect to the database server in section %s of %s", section, config,
+            "Unable to connect to the database server in section %s of %s",
+            section,
+            config,
             exc_info=True,
         )
         return 1
 
     # Today's date at midnight UTC
-    date_today = datetime.combine(
-        datetime.now(pytz.timezone("UTC")), time.min
-    )
+    date_today = datetime.combine(datetime.now(pytz.timezone("UTC")), time.min)
     stuck_cutoff = date_today - timedelta(days=int(args["--days"]))
 
-    logging.info("Querying for all host docs in the %s state that have not been updated since %s.", STATUS.RUNNING, stuck_cutoff)
-    hosts_cursor = db.hosts.find({"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}, no_cursor_timeout=True)
+    logging.info(
+        "Querying for all host docs in the %s state that have not been updated since %s.",
+        STATUS.RUNNING,
+        stuck_cutoff,
+    )
+    hosts_cursor = db.hosts.find(
+        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
+        no_cursor_timeout=True,
+    )
 
     logging.info("Gathering a list of all the owners associated with these host docs.")
     owners = set()
@@ -66,15 +73,22 @@ def main():
         host_count += 1
     logging.info("%d unique owners found in %d host documents", len(owners), host_count)
 
-    logging.info("Updating the host docs by setting their status to %s.", STATUS.WAITING)
-    db.hosts.updateMany({"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}, {"$set": {"status": STATUS.WAITING}})
+    logging.info(
+        "Updating the host docs by setting their status to %s.", STATUS.WAITING
+    )
+    db.hosts.updateMany(
+        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
+        {"$set": {"status": STATUS.WAITING}},
+    )
 
     logging.info("Syncing tallies for all affected owners.")
     for owner in owners:
         logging.debug("Getting tally doc for %s.", owner)
         tally = db.TallyDoc.get_by_owner(owner)
         if tally is None:
-            logging.warning("No existing tally doc found for %s.  Creating a new one.", owner)
+            logging.warning(
+                "No existing tally doc found for %s.  Creating a new one.", owner
+            )
             tally = db.TallyDoc()
     result = db.hosts.update_many(
         {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
