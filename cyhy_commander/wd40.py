@@ -109,3 +109,5 @@ def main():
                 "No existing tally doc found for %s.  Creating a new one.", owner
             )
             tally = db.TallyDoc()
+        logging.debug("Syncing tally for %s.", owner)
+        tally.sync(db)
