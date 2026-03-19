@@ -71,8 +71,7 @@ def main():
         stuck_cutoff,
     )
     hosts_cursor = db.hosts.find(
-        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
-        no_cursor_timeout=True,
+        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
     )
 
     logging.info("Gathering a list of all the owners associated with these host docs.")
