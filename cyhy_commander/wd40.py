@@ -77,16 +77,18 @@ def main():
     # Compute the stuck cutoff
     stuck_cutoff = compute_stuck_cutoff(days)
 
+    # Query for all hosts in the RUNNING state that have not been
+    # updated since stuck_cutoff
     logging.info(
         "Querying for all host docs in the %s state that have not been updated since %s.",
         STATUS.RUNNING,
         stuck_cutoff,
     )
-    hosts_cursor = db.hosts.find(
-        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
-    )
+    filter = {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
+    hosts_cursor = db.hosts.find(filter, {"owner": True})
 
-    logging.info("Gathering a list of all the owners associated with these host docs.")
+    # Gather a set of all owners associated with these host docs
+    logging.info("Gathering all the owners associated with these host docs.")
     owners = set()
     host_count = 0
     for host in hosts_cursor:
@@ -98,12 +100,13 @@ def main():
         host_count,
     )
 
+    # Update host docs with stuck scans
     logging.info(
         "Updating the host docs with stuck scans by setting their status to %s.",
         STATUS.WAITING,
     )
     result = db.hosts.update_many(
-        {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}},
+        filter,
         {"$set": {"status": STATUS.WAITING}},
     )
     logging.info(
@@ -113,6 +116,7 @@ def main():
         STATUS.WAITING,
     )
 
+    # Sync tallies for affected owners
     logging.info("Syncing tallies for all affected owners.")
     for owner in owners:
         logging.debug("Getting tally doc for %s.", owner)
