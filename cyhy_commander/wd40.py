@@ -78,7 +78,8 @@ def main():
         )
         return 1
 
-    # Ensure that the --days argument is indeed an integer
+    # Ensure that the --days argument is indeed a positive, nonzero
+    # integer
     try:
         days = int(args["--days"])
     except (TypeError, ValueError):
@@ -87,6 +88,10 @@ def main():
             args["--days"],
         )
         return 1
+    else:
+        if days < 0:
+            logging.critical("Invalid value for --days (%d); it must be a positive, nonzero integer.", days)
+            return 1
 
     # Compute the stuck cutoff
     stuck_cutoff = compute_stuck_cutoff(days)
