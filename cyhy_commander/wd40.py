@@ -44,6 +44,20 @@ def compute_stuck_cutoff(days):
     return date_today - timedelta(days=days)
 
 
+def sync_tallies(db, owners):
+    logging.info("Syncing tallies for all affected owners.")
+    for owner in owners:
+        logging.debug("Getting tally doc for %s.", owner)
+        tally = db.TallyDoc.get_by_owner(owner)
+        if tally is None:
+            logging.warning(
+                "No existing tally doc found for %s.  Creating a new one.", owner
+            )
+            tally = db.TallyDoc()
+        logging.debug("Syncing tally for %s.", owner)
+        tally.sync(db)
+
+
 def main():
     args = docopt(__doc__, version="v1.0.0")
 
@@ -117,14 +131,4 @@ def main():
     )
 
     # Sync tallies for affected owners
-    logging.info("Syncing tallies for all affected owners.")
-    for owner in owners:
-        logging.debug("Getting tally doc for %s.", owner)
-        tally = db.TallyDoc.get_by_owner(owner)
-        if tally is None:
-            logging.warning(
-                "No existing tally doc found for %s.  Creating a new one.", owner
-            )
-            tally = db.TallyDoc()
-        logging.debug("Syncing tally for %s.", owner)
-        tally.sync(db)
+    sync_tallies(db, owners)
