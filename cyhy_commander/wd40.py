@@ -31,7 +31,7 @@ def main():
     args = docopt(__doc__, version="v1.0.0")
 
     # Set up logging
-    log_level = logging.WARNING
+    log_level = logging.INFO
     if args["--debug"]:
         log_level = logging.DEBUG
     logging.basicConfig(
