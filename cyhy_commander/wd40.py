@@ -37,11 +37,9 @@ def setup_logging(debug):
 
 
 def compute_stuck_cutoff(days):
-    # Today's date at midnight UTC
-    date_today = datetime.utcnow().replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.timezone("UTC")
-    )
-    return date_today - timedelta(days=days)
+    # Current time in UTC
+    now_utc = datetime.utcnow().replace(tzinfo=pytz.timezone("UTC"))
+    return now_utc - timedelta(days=days)
 
 
 def sync_tallies(db, owners):
