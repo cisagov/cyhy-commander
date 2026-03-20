@@ -25,5 +25,6 @@ setup(
         "docopt >= 0.6.2",
         "python-daemon == 2.3.0",
         "lockfile >= 0.9.1",
+        "pytz >= 2026.1.post1"
     ],
 )
