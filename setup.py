@@ -25,6 +25,6 @@ setup(
         "Fabric >= 1.8.3, < 2.0.0",
         "lockfile >= 0.9.1",
         "python-daemon == 2.3.0",
-        "pytz >= 2026.1.post1"
+        "pytz >= 2026.1.post1",
     ],
 )
