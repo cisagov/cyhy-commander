@@ -88,7 +88,10 @@ def main():
         return 1
     else:
         if days < 0:
-            logging.critical("Invalid value for --days (%d); it must be a positive, nonzero integer.", days)
+            logging.critical(
+                "Invalid value for --days (%d); it must be a positive, nonzero integer.",
+                days,
+            )
             return 1
 
     # Compute the stuck cutoff
