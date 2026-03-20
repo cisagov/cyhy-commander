@@ -36,12 +36,21 @@ def setup_logging(debug):
     )
 
 
+def compute_stuck_cutoff(days):
+    # Today's date at midnight UTC
+    date_today = datetime.utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.timezone("UTC")
+    )
+    return date_today - timedelta(days=days)
+
+
 def main():
     args = docopt(__doc__, version="v1.0.0")
 
     # Set up logging
     setup_logging(args["--debug"])
 
+    # Connect to database
     config = args["--config-file"]
     section = args["--section"]
     try:
@@ -55,10 +64,7 @@ def main():
         )
         return 1
 
-    # Today's date at midnight UTC
-    date_today = datetime.utcnow().replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.timezone("UTC")
-    )
+    # Ensure that the --days argument is indeed an integer
     try:
         days = int(args["--days"])
     except (TypeError, ValueError):
@@ -67,7 +73,9 @@ def main():
             args["--days"],
         )
         return 1
-    stuck_cutoff = date_today - timedelta(days=days)
+
+    # Compute the stuck cutoff
+    stuck_cutoff = compute_stuck_cutoff(days)
 
     logging.info(
         "Querying for all host docs in the %s state that have not been updated since %s.",
