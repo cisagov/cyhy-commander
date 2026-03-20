@@ -27,16 +27,20 @@ from cyhy.db import database
 from cyhy.core.common import STATUS
 
 
-def main():
-    args = docopt(__doc__, version="v1.0.0")
-
-    # Set up logging
+def setup_logging(debug):
     log_level = logging.INFO
-    if args["--debug"]:
+    if debug:
         log_level = logging.DEBUG
     logging.basicConfig(
         format="%(asctime)-15s %(levelname)s %(message)s", level=log_level
     )
+
+
+def main():
+    args = docopt(__doc__, version="v1.0.0")
+
+    # Set up logging
+    setup_logging(args["--debug"])
 
     config = args["--config-file"]
     section = args["--section"]
