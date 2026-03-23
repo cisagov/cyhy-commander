@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="cyhy-commander",
-    version="1.1.0",
+    version="1.2.0",
     author="Mark Feldhousen Jr.",
     author_email="mark.feldhousen@cisa.dhs.gov",
     packages=find_packages(),
@@ -13,6 +13,7 @@ setup(
         "console_scripts": [
             "cyhy-commander=cyhy_commander.commander:main",
             "cyhy-nessus-import=cyhy_commander.nessus_import_tool:main",
+            "cyhy-wd40=cyhy_commander.wd40:main",
         ]
     },
     # license='LICENSE.txt',
@@ -20,9 +21,10 @@ setup(
     # long_description=open('README.txt').read(),
     install_requires=[
         "cyhy-core >= 1.0.0",
-        "Fabric >= 1.8.3, < 2.0.0",
         "docopt >= 0.6.2",
-        "python-daemon == 2.3.0",
+        "Fabric >= 1.8.3, < 2.0.0",
         "lockfile >= 0.9.1",
+        "python-daemon == 2.3.0",
+        "pytz",
     ],
 )
