@@ -21,10 +21,10 @@ Options:
 # Standard Python Libraries
 from datetime import datetime, timedelta
 import logging
-import pytz
 
 # Third-Party Libraries
 from docopt import docopt
+import pytz
 
 # cisagov Libraries
 from cyhy.db import database
