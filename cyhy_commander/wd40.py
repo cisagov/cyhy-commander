@@ -105,7 +105,7 @@ def main():
         stuck_cutoff,
     )
     filter = {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
-    hosts_cursor = db.hosts.find(filter, {"owner": True})
+    hosts_cursor = db.HostDoc.collection.find(filter, {"owner": True})
 
     # Gather a set of all owners associated with these host docs
     logging.info("Gathering all the owners associated with these host docs.")
@@ -125,7 +125,7 @@ def main():
         "Updating the host docs with stuck scans by setting their status to %s.",
         STATUS.WAITING,
     )
-    result = db.hosts.update_many(
+    result = db.HostDoc.collection.update_many(
         filter,
         {"$set": {"status": STATUS.WAITING}},
     )
