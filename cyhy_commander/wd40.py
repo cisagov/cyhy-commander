@@ -110,8 +110,8 @@ def main():
         STATUS.RUNNING,
         stuck_cutoff,
     )
-    filter = {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
-    hosts_cursor = db.HostDoc.collection.find(filter, {"owner": True})
+    query = {"status": STATUS.RUNNING, "last_change": {"$lt": stuck_cutoff}}
+    hosts_cursor = db.HostDoc.collection.find(query, {"owner": True})
 
     # Gather a set of all owners associated with these host docs
     logging.info("Gathering all the owners associated with these host docs.")
@@ -132,7 +132,7 @@ def main():
         STATUS.WAITING,
     )
     result = db.HostDoc.collection.update_many(
-        filter,
+        query,
         {"$set": {"status": STATUS.WAITING}},
     )
     logging.info(
