@@ -56,7 +56,8 @@ def sync_tallies(db, owners):
             tally.sync(db)
         else:
             logging.warning(
-                "No existing tally doc found for %s.  You should verify that this is intentional, e.g., because the org has been retired.", owner
+                "No existing tally doc found for %s.  You should verify that this is intentional, e.g., because the org has been retired.",
+                owner,
             )
             continue
 
