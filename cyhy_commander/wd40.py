@@ -51,13 +51,14 @@ def sync_tallies(db, owners):
     for owner in owners:
         logging.debug("Getting tally doc for %s.", owner)
         tally = db.TallyDoc.get_by_owner(owner)
-        if tally is None:
+        if tally is not None:
+            logging.debug("Syncing tally for %s.", owner)
+            tally.sync(db)
+        else:
             logging.warning(
-                "No existing tally doc found for %s.  Creating a new one.", owner
+                "No existing tally doc found for %s.  You should verify that this is intentional, e.g., because the org has been retired.", owner
             )
-            tally = db.TallyDoc()
-        logging.debug("Syncing tally for %s.", owner)
-        tally.sync(db)
+            continue
 
 
 def main():
