@@ -2,7 +2,7 @@
 
 Stuck scans are defined as scans that are in the RUNNING state but
 have had no updates in a specified number of days. The number of days
-can be specified in the script's CLI and defaults to 1.
+can be specified and defaults to 1.
 
 Usage:
   cyhy-wd40 [options]
