@@ -79,11 +79,21 @@ class NmapImporter(object):
 
     def process(self, nmap_filename, target_filename):
         """Imports nmap files created from netscans and portscans"""
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
+        self.__logger.debug(
+            "[%s] Starting processing of %s" % (thread_name, nmap_filename)
+        )
         # import target ips
         ips = netaddr.IPSet()
         with open(target_filename) as f:
             for ip_line in f:
                 self.__ticket_manager.ips.add(ip_line)
+        self.__logger.debug(
+            "[%s] Found %d targets in target file %s"
+            % (thread_name, len(self.__ticket_manager.ips), target_filename)
+        )
         # parse nmap data
         f = open(nmap_filename, "rb")
         # sometimes the first line of the nmap output is not xml
@@ -107,6 +117,11 @@ class NmapImporter(object):
                 "[%s] No HostDoc found for IP %s" % (thread_name, str(ip))
             )
             ip_owner = UNKNOWN_OWNER
+
+        self.__logger.debug(
+            "[%s] Processing %d port results for IP %s"
+            % (thread_name, len(parsed_host["ports"]), str(ip))
+        )
         for (port, details) in parsed_host["ports"].items():
             if details["state"] != "open":  # only storing open ports
                 continue
@@ -174,6 +189,9 @@ class NmapImporter(object):
         return has_at_least_one_open_port
 
     def __store_os_details(self, parsed_host):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         details = dict()
         if parsed_host.has_key("os"):
             util.copy_attrs(parsed_host["os"], details)
@@ -187,8 +205,16 @@ class NmapImporter(object):
         details["latest"] = True
 
         ip = parsed_host["addr"]
+        self.__logger.debug(
+            "[%s] Storing OS details for IP %s" % (thread_name, str(ip))
+        )
+
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc and host_doc.get("hostnames"):
+            self.__logger.debug(
+                "[%s] HostDoc for IP %s has %d hostnames"
+                % (thread_name, str(ip), len(host_doc["hostnames"]))
+            )
             # Create a HostScanDoc for each hostname/owner combination
             for h in host_doc["hostnames"]:
                 host = self.__db.HostScanDoc()
@@ -239,10 +265,23 @@ class NmapImporter(object):
         self.__ch_db.transition_host(ip, has_open_ports=has_at_least_one_open_port)
 
     def __end_callback(self):
+        # Get the name of the current thread
+        thread_name = threading.current_thread().name
+
         # clear the latest flags compiled from __netscan_host_callback down
+        self.__logger.debug(
+            "[%s] Resetting latest flag for %d IPs"
+            % (thread_name, len(self.__ips_to_reset_latest))
+        )
         self.__db.HostScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         self.__db.PortScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         self.__db.VulnScanDoc.reset_latest_flag_by_ip(self.__ips_to_reset_latest)
         # tell the ticket manager to close what needs to be closed
+        self.__logger.debug("[%s] Closing tickets" % thread_name)
         self.__ticket_manager.close_tickets()
+        self.__logger.debug(
+            "[%s] Clear the latest flag for applicable VulnScanDocs" % thread_name
+        )
         self.__ticket_manager.clear_vuln_latest_flags()
+
+        self.__logger.debug("[%s] Reached end of Nmap import" % thread_name)

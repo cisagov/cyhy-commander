@@ -463,15 +463,18 @@ class Commander(object):
                 job_processing_function (callable): The function used to process a job.
 
             Returns:
-                The job path that was processed or None if the queue was empty.
+                A tuple whose first item is the job path that was processed or None if
+                the queue was empty, and whose second item is the duration it took to
+                process the job or determine the queue was empty.
             """
             job_path = None
+            job_processing_start = time.time()
 
             # check the successful jobs queue
             try:
                 job_path = target_job_queue.get(timeout=1)
             except Queue.Empty:
-                return job_path
+                return (job_path, time.time() - job_processing_start)
 
             try:
                 job_processing_function(job_path)
@@ -482,8 +485,8 @@ class Commander(object):
             # report task completion no matter what so the queue can be joined
             target_job_queue.task_done()
 
-            # return path of the job that was processed
-            return job_path
+            # return path of the job that was processed and how long it took to process
+            return (job_path, time.time() - job_processing_start)
 
         # run as long as the commander is processing jobs
         while self.__is_processing_jobs:
@@ -493,13 +496,19 @@ class Commander(object):
             )
 
             # process failed job if a successful job was not processed
-            if job_processing_results is None:
+            if job_processing_results[0] is None:
                 job_processing_results = process_job_from_queue(
                     self.__failed_job_queue, self.__process_failed_job
                 )
 
-            # sleep if both queues are empty
-            if job_processing_results is None:
+            if job_processing_results[0] is not None:
+                # output how long it took to process the job
+                self.__logger.debug(
+                    "Processed %s in %1.1f seconds"
+                    % (job_processing_results[0], job_processing_results[1])
+                )
+            else:
+                # sleep if both queues are empty
                 time.sleep(self.__job_processing_sleep_duration)
 
     def __process_successful_job(self, job_path):
