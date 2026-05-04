@@ -16,15 +16,11 @@ Options:
 
 """
 
-
-# easy-installs
-# fabric
-# python-daemon
-
 from collections import defaultdict
 import logging
 import os
 import Queue
+from pathlib import Path, PurePosixPath
 import random
 import shutil
 import signal
@@ -37,11 +33,6 @@ from ConfigParser import SafeConfigParser
 import daemon
 from docopt import docopt
 import lockfile
-from fabric import operations
-from fabric.api import task, run, env
-from fabric.network import disconnect_all, normalize
-from fabric.state import connections
-from fabric.tasks import Task, execute
 
 from cyhy.core import *
 from cyhy.core.common import DEFAULT_OWNER, SCAN_TYPE, STAGE
@@ -50,11 +41,7 @@ from cyhy.util import setup_logging
 
 from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
 from job_source import DirectoryJobSource, DatabaseJobSource
-
-# fabric configuration
-env.command_timeout = 60
-env.keepalive = 30
-env.use_ssh_config = True
+from . import ssh_transport
 
 # remote files
 DONE_DIR = "runner/done"
@@ -75,15 +62,13 @@ STOP_FILE = "stop"
 SUCCESS_DIR = "done"
 
 # local job files
-me = os.path.realpath(__file__)
-myDir = os.path.dirname(me)
-jobsDir = os.path.join(myDir, "jobs")
-BASESCAN_JOB_FILE = os.path.join(jobsDir, "basescan.sh")
-NETSCAN1_JOB_FILE = os.path.join(jobsDir, "netscan1.sh")
-NETSCAN2_JOB_FILE = os.path.join(jobsDir, "netscan2.sh")
-PORTSCAN_JOB_FILE = os.path.join(jobsDir, "portscan.sh")
-SLEEP_JOB_FILE = os.path.join(jobsDir, "rand-sleep.py")
-VULNSCAN_JOB_FILE = os.path.join(jobsDir, "vulnscan.py")
+_jobs_dir = Path(__file__).resolve().parent / "jobs"
+BASESCAN_JOB_FILE = _jobs_dir / "basescan.sh"
+NETSCAN1_JOB_FILE = _jobs_dir / "netscan1.sh"
+NETSCAN2_JOB_FILE = _jobs_dir / "netscan2.sh"
+PORTSCAN_JOB_FILE = _jobs_dir / "portscan.sh"
+SLEEP_JOB_FILE = _jobs_dir / "rand-sleep.py"
+VULNSCAN_JOB_FILE = _jobs_dir / "vulnscan.py"
 
 # config file
 DATABASE_NAME = "database-name"
@@ -161,6 +146,9 @@ class Commander(object):
         self.__successful_job_queue = None
         self.__test_mode = False
 
+        # New SSH transport (Fabric replacement)
+        self.__ssh = ssh_transport.SSHTransport(self.__logger)
+
     def __setup_logging(self, debug_logging, console_logging):
         # get default logging setup
         if debug_logging:
@@ -173,14 +161,15 @@ class Commander(object):
         else:
             setup_logging(level, filename=LOG_FILE)
 
-        # This is only output if debug in enabled.  Skipped outwise.
         self.__logger.debug("Debug logging enabled")
 
     def __setup_directories(self):
         for directory in (SUCCESS_DIR, PUSHED_DIR, FAILED_DIR):
-            if not os.path.exists(directory):
+            path = Path(directory)
+            if not path.exists():
                 self.__logger.info('Creating directory "%s".' % (directory))
-                os.makedirs(directory)
+                path.mkdir(parents=True)
+
 
     def __setup_db(self, db_name, uri):
         self.__db = database.db_from_connection(uri, db_name)
@@ -272,118 +261,144 @@ class Commander(object):
             )
         self.__failure_sinks = [TryAgainSink(self.__db)]
 
-    @task
-    def __done_jobs(self):
+    def __done_jobs(self, host: str) -> None:
         try:
-            output = run("ls %s" % DONE_DIR)
-            if output.failed:
+            cp = self.__ssh.run(host, "ls {d}".format(d=shlex.quote(DONE_DIR)))
+            if cp.returncode != 0:
                 self.__logger.warning(
-                    'Unable to get listing of "%s" on %s' % (DONE_DIR, env.host_string)
+                    'Unable to get listing of "%s" on %s: %s',
+                    DONE_DIR,
+                    host,
+                    (cp.stderr or "").strip(),
                 )
-                output = ""
-            doneJobs = output.split()
-            for job in doneJobs:
-                jobPath = os.path.join(DONE_DIR, job)
-                output = run("ls -a %s" % (jobPath))
-                jobContents = output.split()
-                if DONE_FILE in jobContents:
-                    self.__logger.info(
-                        "%s is ready for pickup on %s" % (job, env.host_string)
-                    )
-                    donePath = os.path.join(jobPath, DONE_FILE)
-                    exitCode = run("cat %s" % donePath)
-                    if exitCode == "0":
-                        destDir = SUCCESS_DIR
-                    else:
-                        destDir = FAILED_DIR
-                        self.__logger.warning(
-                            "%s had a non-zero exit code: %s" % (job, exitCode)
-                        )
+                return
 
-                    paths = operations.get(jobPath, destDir)
-                    if len(paths.failed) == 0:
-                        self.__logger.info(
-                            "%s was copied successfully from %s to %s"
-                            % (job, env.host_string, destDir)
-                        )
-                        # remove remote dir
-                        run("rm -rf %s" % jobPath)
-                        self.__logger.info(
-                            "%s was removed from %s" % (job, env.host_string)
-                        )
-                    local_job_path = os.path.join(destDir, job)
+            done_jobs = (cp.stdout or "").split()
+            for job in done_jobs:
+                job_path = str(PurePosixPath(DONE_DIR) / job)
+                done_path = str(PurePosixPath(job_path) / DONE_FILE)
 
-                    if destDir == SUCCESS_DIR:
-                        self.__successful_job_queue.put(local_job_path)
-                    else:
-                        self.__failed_job_queue.put(local_job_path)
+                # Only proceed when .done exists and has an exit code.
+                cp_done = self.__ssh.run(
+                    host,
+                    "test -f {p} && cat {p} || true".format(p=shlex.quote(done_path)),
+                )
+                exit_code = (cp_done.stdout or "").strip()
+                if not exit_code:
+                    self.__logger.warning("%s is not ready for pickup on %s", job, host)
+                    continue
 
+                self.__logger.info("%s is ready for pickup on %s", job, host)
+
+                if exit_code == "0":
+                    dest_dir = SUCCESS_DIR
+                else:
+                    dest_dir = FAILED_DIR
+                    self.__logger.warning("%s had a non-zero exit code: %s", job, exit_code)
+
+                local_job_dir = str(Path(dest_dir) / job)
+                self.__ssh.rsync_pull_dir(
+                    host=host,
+                    remote_dir=job_path,
+                    local_dir=local_job_dir,
+                )
+
+                self.__logger.info(
+                    "%s was copied successfully from %s to %s",
+                    job,
+                    host,
+                    dest_dir,
+                )
+
+                # remove remote dir
+                cp_rm = self.__ssh.run(host, "rm -rf {p}".format(p=shlex.quote(job_path)))
+                if cp_rm.returncode == 0:
+                    self.__logger.info("%s was removed from %s", job, host)
                 else:
                     self.__logger.warning(
-                        "%s is not ready for pickup on %s" % (job, env.host_string)
+                        "Unable to remove %s from %s: %s",
+                        job_path,
+                        host,
+                        (cp_rm.stderr or "").strip(),
                     )
-        except Exception as e:
-            self.__logger.error(
-                "Exception when retrieving done jobs from %s" % env.host_string
-            )
-            self.__logger.error(e)
-            self.__host_exceptions[env.host_string] += 1
 
-    @task
-    def __running_job_count(self):
+                if dest_dir == SUCCESS_DIR:
+                    self.__successful_job_queue.put(local_job_dir)
+                else:
+                    self.__failed_job_queue.put(local_job_dir)
+
+        except Exception as e:
+            self.__logger.error("Exception when retrieving done jobs from %s", host)
+            self.__logger.error(e)
+            self.__host_exceptions[host] += 1
+
+    def __running_job_count(self, host: str):
         try:
-            output = run("ls %s" % RUNNING_DIR)
-            if output.failed:
+            cp = self.__ssh.run(host, "ls {d}".format(d=shlex.quote(RUNNING_DIR)))
+            if cp.returncode != 0:
                 self.__logger.warning(
-                    'Unable to get listing of "%s" on %s'
-                    % (RUNNING_DIR, env.host_string)
+                    'Unable to get listing of "%s" on %s: %s',
+                    RUNNING_DIR,
+                    host,
+                    (cp.stderr or "").strip(),
                 )
                 return None
-            runningJobs = output.split()
-            count = len(runningJobs)
-            return count
+            running_jobs = (cp.stdout or "").split()
+            return len(running_jobs)
         except Exception as e:
-            self.__logger.error(
-                "Exception when retrieving running job count from %s" % env.host_string
-            )
+            self.__logger.error("Exception when retrieving running job count from %s", host)
             self.__logger.error(e)
-            self.__host_exceptions[env.host_string] += 1
+            self.__host_exceptions[host] += 1
+            return None
 
-    @task
-    def __push_job(self, job_path):
+    def __push_job(self, host: str, job_path: str) -> None:
         try:
-            paths = operations.put(job_path, RUNNING_DIR)
-            if len(paths.failed) == 0:
-                self.__logger.info(
-                    "%s was pushed successfully to %s" % (job_path, env.host_string)
-                )
-                job_name = os.path.basename(job_path)
-                run("touch %s" % os.path.join(RUNNING_DIR, job_name, READY_FILE))
-                self.__move_to_pushed(job_path)
-            else:
-                self.__logger.error(
-                    "Error pushing %s to host %s" % (job_path, env.host_string)
-                )
-        except Exception as e:
-            self.__logger.error(
-                "Exception when pushing %s to host %s" % (job_path, env.host_string)
+            job_name = Path(job_path.rstrip("/")).name
+            remote_job_dir = str(PurePosixPath(RUNNING_DIR) / job_name)
+
+            self.__ssh.rsync_push_dir(
+                host=host,
+                local_dir=job_path,
+                remote_dir=remote_job_dir,
             )
+
+            self.__logger.info("%s was pushed successfully to %s", job_path, host)
+
+            cp_touch = self.__ssh.run(
+                host,
+                "touch {p}".format(p=shlex.quote(str(PurePosixPath(remote_job_dir) / READY_FILE))),
+            )
+            if cp_touch.returncode != 0:
+                self.__logger.error(
+                    "Error touching %s on host %s: %s",
+                    os.path.join(remote_job_dir, READY_FILE),
+                    host,
+                    (cp_touch.stderr or "").strip(),
+                )
+                self.__host_exceptions[host] += 1
+                return
+
+            self.__move_to_pushed(job_path)
+
+        except Exception as e:
+            self.__logger.error("Exception when pushing %s to host %s", job_path, host)
             self.__logger.error(e)
-            self.__host_exceptions[env.host_string] += 1
+            self.__host_exceptions[host] += 1
 
     def __unique_filename(self, path):
-        if not os.path.exists(path):
-            return path
-        new_name = "%s.%d" % (os.path.basename(path), int(time.time() * 1000000))
-        new_path = os.path.join(os.path.dirname(path), new_name)
-        return new_path
+        p = Path(path)
+        if not p.exists():
+            return str(p)
+        new_name = "%s.%d" % (p.name, int(time.time() * 1000000))
+        return str(p.with_name(new_name))
+
 
     def __move_to_pushed(self, job_path):
         if not self.__test_mode:
             shutil.rmtree(job_path)
             self.__logger.info("%s deleted" % job_path)
         else:
-            dest = os.path.join(PUSHED_DIR, os.path.basename(job_path))
+            dest = str(Path(PUSHED_DIR) / Path(job_path).name)
             dest = self.__unique_filename(dest)
             shutil.move(job_path, dest)
             self.__logger.info("%s moved locally to %s" % (job_path, dest))
@@ -434,7 +449,7 @@ class Commander(object):
                     "Not enough work available to fill %s hosts" % workgroup_name
                 )
                 break  # no more work to do
-            execute(self.__push_job, self, job_path, hosts=[lowest_host])
+            self.__push_job(lowest_host, job_path)
             counts[lowest_host] += 1
 
     def __monitor_job_queues(self):
@@ -548,11 +563,11 @@ class Commander(object):
         self.__is_running = False
 
     def __check_stop_file(self):
-        if os.path.exists(STOP_FILE):
+        if Path(STOP_FILE).exists():
             self.__logger.warning(
                 "Stop file found.  Shutting down after this work cycle completes."
             )
-            os.remove(STOP_FILE)
+            Path(STOP_FILE).unlink()
             self.__is_running = False
 
     def __check_database_pause(self):
@@ -641,12 +656,11 @@ class Commander(object):
             self.__logger.info("%s request document created" % DEFAULT_OWNER)
 
     def do_work(self):
-        env.warn_only = True
         self.__logger.info("Starting up.")
         self.__setup_directories()
 
         # process configuration
-        if not os.path.exists(CONFIG_FILENAME):
+        if not Path(CONFIG_FILENAME).exists():
             print >>sys.stderr, 'Configuration file not found: "%s"' % CONFIG_FILENAME
             self.__write_config()
             print >>sys.stderr, "A default configuration file was created in the working directory."
@@ -769,37 +783,21 @@ class Commander(object):
 
                 # check for hosts that are coming off of cooldown
                 self.__logger.debug("Checking for hosts to bring off of cooldown")
-                # we don't want to modify the list while we are iterating, so we
-                # iterate through a copy and remove from the original
                 for host_info in self.__hosts_on_cooldown[:]:
                     cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
                     if time.time() >= cooldown_end:
-                        try:
-                            # Manually set the appropriate environment value
-                            env.host_string = host_info["host"]
-                            # Manually re-connect to the host
-                            for cache_key in host_info["cache_keys"]:
-                                connections.connect(cache_key)
-                        except Exception as e:
-                            self.__logger.error(
-                                "Unable to reconnect to '%s'" % host_info["host"]
-                            )
-                            self.__logger.error(e)
-                            continue
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
                             work_groups[group][1].sort()
                         self.__hosts_on_cooldown.remove(host_info)
                         self.__logger.debug(
-                            "Host '%s' has been put back into rotation"
-                            % host_info["host"]
+                            "Host '%s' has been put back into rotation" % host_info["host"]
                         )
                     else:
                         self.__logger.debug(
                             "Host '%s' is out of rotation until %s"
                             % (
                                 host_info["host"],
-                                # output an ISO 8601 human readable time
                                 time.strftime(
                                     "%Y-%m-%dT%H:%M:%S", time.localtime(cooldown_end)
                                 ),
@@ -822,13 +820,6 @@ class Commander(object):
                             "work_groups": groups,
                         }
                         self.__host_exceptions[host] = 0
-                        cache_keys = []
-                        for cache_key in connections.keys():
-                            cuser, chost, cport = normalize(cache_key)
-                            if chost == host:
-                                connections[cache_key].close()
-                                cache_keys.append(cache_key)
-                        info_dict["cache_keys"] = cache_keys
                         self.__hosts_on_cooldown.append(info_dict)
                         self.__logger.debug(
                             "Host '%s' has been removed from rotation" % host
@@ -842,7 +833,8 @@ class Commander(object):
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
-                    execute(self.__done_jobs, self, hosts=hosts)
+                    for host in hosts:
+                        self.__done_jobs(host)
 
                 # wait for work to process
                 self.__logger.debug("Waiting for completed jobs to be processed.")
@@ -862,11 +854,13 @@ class Commander(object):
 
                 # push out new work and count
                 self.__logger.debug("Checking sources for new jobs")
-                all_workgroup_counts = {}  # track counts from each work_group
+                all_workgroup_counts = {}
                 for (workgroup_name, hosts, sources, jobs_per_host) in work_groups:
                     if hosts == None:
                         continue
-                    counts = execute(self.__running_job_count, self, hosts=hosts)
+                    counts = {}
+                    for host in hosts:
+                        counts[host] = self.__running_job_count(host)
                     self.__fill_hosts(counts, sources, workgroup_name, jobs_per_host)
                     all_workgroup_counts.update(counts)
 
@@ -905,17 +899,16 @@ class Commander(object):
         job_queue_monitor_thread.join()
 
         self.__logger.info("Shutting down.")
-        disconnect_all()
 
 
 def main():
-    args = docopt(__doc__, version="v1.1.0")
-    workingDir = os.path.join(os.getcwd(), args["<working-dir>"])
-    if not os.path.exists(workingDir):
-        print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % workingDir
-        os.mkdir(workingDir)
-    os.chdir(workingDir)
-    lock = lockfile.LockFile(os.path.join(workingDir, LOCK_FILENAME), timeout=0)
+    args = docopt(__doc__, version="v2.0.0")
+    workingDir = Path.cwd() / args["<working-dir>"]
+    if not workingDir.exists():
+        print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir)
+        workingDir.mkdir()
+    os.chdir(str(workingDir))
+    lock = lockfile.LockFile(str(workingDir / LOCK_FILENAME), timeout=0)
     if lock.is_locked():
         print >>sys.stderr, "Cannot start.  There is already a cyhy-commander executing in this working directory."
         sys.exit(-1)
