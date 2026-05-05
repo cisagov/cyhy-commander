@@ -1,46 +1,71 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Cyber Hygiene commander.
+
 Feeds scanners jobs, processes output, and stores results in database.
-
-Usage:
-  commander [options] <working-dir>
-  commander (-h | --help)
-  commander --version
-
-Options:
-  -b --background                Run in background (daemonize).
-  -d --debug                     Enable debug logging.
-  -l --stdout-log                Log to standard out.
-  -s SECTION --section=SECTION   Configuration section to use.
-
 """
 
+import argparse
 from collections import defaultdict
 import logging
 import os
-import Queue
+import queue
 from pathlib import Path, PurePosixPath
 import random
+import shlex
 import shutil
 import signal
 import sys
 import threading
 import time
 import traceback
-from ConfigParser import SafeConfigParser
 
-import daemon
-from docopt import docopt
-import lockfile
+# TODO: Phase 3 — replace with cyhy-config/CommanderConfig
+# from ConfigParser import SafeConfigParser  (removed — Python 2 only)
 
-from cyhy.core import *
-from cyhy.core.common import DEFAULT_OWNER, SCAN_TYPE, STAGE
-from cyhy.db import CHDatabase, database
-from cyhy.util import setup_logging
+# TODO: Phase 4 — replace with cyhy_db.initialize_db
+# from cyhy.db import CHDatabase, database  (removed)
 
-from job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
-from job_source import DirectoryJobSource, DatabaseJobSource
+# TODO: Phase 6 — replace with cyhy-logging setup_logging
+# from cyhy.util import setup_logging  (removed)
+
+# Stubs for cyhy.core symbols removed in Phase 4
+DEFAULT_OWNER = "FEDERAL"  # TODO: replace with cyhy_db constant or config value
+
+# TODO: replace with cyhy_db.models.enum.Stage
+class _StageStub:
+    NETSCAN1 = "NETSCAN1"
+    NETSCAN2 = "NETSCAN2"
+    PORTSCAN = "PORTSCAN"
+    VULNSCAN = "VULNSCAN"
+
+STAGE = _StageStub()
+
+# TODO: replace with cyhy_db.models.enum.ScanType
+class _ScanTypeStub:
+    CYHY = "CYHY"
+
+SCAN_TYPE = _ScanTypeStub()
+
+# TODO: Phase 4 — replace with cyhy_db.models.RequestDoc / db_ops
+# CHDatabase stub — methods used in do_work() will be replaced in Phase 4
+class _CHDatabaseStub:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def check_host_next_scans(self):
+        pass  # TODO: Phase 4 — replace with db_ops.check_host_next_scans()
+
+    def balance_ready_hosts(self):
+        pass  # TODO: Phase 4 — replace with db_ops.balance_ready_hosts()
+
+    def should_commander_pause(self):
+        return False  # TODO: Phase 4 — replace with db_ops.should_commander_pause()
+
+CHDatabase = _CHDatabaseStub
+
+from .job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
+from .job_source import DirectoryJobSource, DatabaseJobSource
 from . import ssh_transport
 
 # remote files
@@ -63,7 +88,7 @@ SUCCESS_DIR = "done"
 
 # local job files
 _jobs_dir = Path(__file__).resolve().parent / "jobs"
-BASESCAN_JOB_FILE = _jobs_dir / "basescan.sh"
+# BASESCAN_JOB_FILE removed — BASESCAN support dropped per spec
 NETSCAN1_JOB_FILE = _jobs_dir / "netscan1.sh"
 NETSCAN2_JOB_FILE = _jobs_dir / "netscan2.sh"
 PORTSCAN_JOB_FILE = _jobs_dir / "portscan.sh"
@@ -92,10 +117,9 @@ TESTING_PURGE_SECTION = "testing-purge"
 TESTING_SECTION = "testing"
 
 # TODO eventual config options
-IPS_PER_BASESCAN_JOB = 32
 IPS_PER_NETSCAN1_JOB = 128
-IPS_PER_NETSCAN2_JOB = 128 / 2
-IPS_PER_PORTSCAN_JOB = 32 / 4
+IPS_PER_NETSCAN2_JOB = 128 // 2
+IPS_PER_PORTSCAN_JOB = 32 // 4
 IPS_PER_VULNSCAN_JOB = 4
 RANDOMIZE_SOURCES = True
 
@@ -157,9 +181,11 @@ class Commander(object):
             level = DEFAULT_LOGGER_LEVEL
 
         if console_logging:
-            setup_logging(level, console=True)
+            # TODO: Phase 6 — replace with cyhy-logging setup_logging(level, console=True)
+            logging.basicConfig(level=level, format=LOGGER_FORMAT, stream=sys.stdout)
         else:
-            setup_logging(level, filename=LOG_FILE)
+            # TODO: Phase 6 — replace with cyhy-logging setup_logging(level, filename=LOG_FILE)
+            logging.basicConfig(level=level, format=LOGGER_FORMAT)
 
         self.__logger.debug("Debug logging enabled")
 
@@ -172,7 +198,8 @@ class Commander(object):
 
 
     def __setup_db(self, db_name, uri):
-        self.__db = database.db_from_connection(uri, db_name)
+        # TODO: Phase 4 — replace with await cyhy_db.initialize_db(uri, db_name)
+        self.__db = None  # TODO: Phase 4 — real DB connection
         self.__ch_db = CHDatabase(self.__db, next_scan_limit=self.__next_scan_limit)
 
     def __setup_sources(self):
@@ -209,7 +236,6 @@ class Commander(object):
                     count=IPS_PER_VULNSCAN_JOB,
                 )
             )
-            # self.__nmap_sources.append(DatabaseJobSource(SLEEP_JOB_FILE, self.__db, job_type=STAGE.BASESCAN, count=IPS_PER_BASESCAN_JOB))
         else:
             self.__nessus_sources.append(DirectoryJobSource(DROP_DIR))
             self.__nmap_sources.append(
@@ -244,7 +270,6 @@ class Commander(object):
                     count=IPS_PER_VULNSCAN_JOB,
                 )
             )
-            # self.__nmap_sources.append(DatabaseJobSource(BASESCAN_JOB_FILE, self.__db, job_type=STAGE.BASESCAN, count=IPS_PER_BASESCAN_JOB))
 
     def __setup_sinks(self):
         if self.__test_mode:
@@ -255,7 +280,6 @@ class Commander(object):
             netscan2_sink = NmapSink(self.__db, STAGE.NETSCAN2)
             portscan_sink = NmapSink(self.__db, STAGE.PORTSCAN)
             vulnscan_sink = NessusSink(self.__db)
-            # baseline_sink = NmapSink(self.__db, STAGE.BASESCAN)
             self.__success_sinks.extend(
                 (netscan1_sink, netscan2_sink, portscan_sink, vulnscan_sink)
             )
@@ -474,7 +498,7 @@ class Commander(object):
             """Helper function to process jobs from a queue.
 
             Args:
-                target_job_queue (Queue.Queue): The queue to get a job to process.
+                target_job_queue (queue.Queue): The queue to get a job to process.
                 job_processing_function (callable): The function used to process a job.
 
             Returns:
@@ -485,12 +509,12 @@ class Commander(object):
             # check the successful jobs queue
             try:
                 job_path = target_job_queue.get(timeout=1)
-            except Queue.Empty:
+            except queue.Empty:
                 return job_path
 
             try:
                 job_processing_function(job_path)
-            except Exception, e:
+            except Exception as e:
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
 
@@ -577,43 +601,14 @@ class Commander(object):
             self.__check_stop_file()
 
     def __write_config(self):
-        config = SafeConfigParser()
-        config.set(None, DATABASE_URI, "mongodb://localhost:27017/")
-        config.set(None, JOBS_PER_NMAP_HOST, "8")
-        config.set(None, JOBS_PER_NESSUS_HOST, "8")
-        config.set(None, JOB_PROCESSING_THREADS, "4")
-        config.set(None, POLL_INTERVAL, "30")
-        config.set(None, NEXT_SCAN_LIMIT, "2000")
-        config.set(None, DEFAULT_SECTION, TESTING_SECTION)
-        config.set(None, TEST_MODE, "false")
-        config.set(None, KEEP_FAILURES, "false")
-        config.set(None, KEEP_SUCCESSES, "false")
-        config.set(None, SHUTDOWN_WHEN_IDLE, "false")
-        config.set(None, DEFAULT_SCHEDULER, "PERSISTENT1")
-        config.add_section(TESTING_SECTION)
-        config.set(TESTING_SECTION, NMAP_HOSTS, "comma,separated,list")
-        config.set(TESTING_SECTION, NESSUS_HOSTS, "comma,separated,list")
-        config.set(TESTING_SECTION, DATABASE_NAME, "test_database")
-        config.set(TESTING_SECTION, TEST_MODE, "true")
-        config.add_section(TESTING_PURGE_SECTION)
-        config.set(TESTING_PURGE_SECTION, JOBS_PER_NMAP_HOST, "0")
-        config.set(TESTING_PURGE_SECTION, JOBS_PER_NESSUS_HOST, "0")
-        config.set(TESTING_PURGE_SECTION, SHUTDOWN_WHEN_IDLE, "true")
-        config.set(TESTING_PURGE_SECTION, NMAP_HOSTS, "comma,separated,list")
-        config.set(TESTING_PURGE_SECTION, NESSUS_HOSTS, "comma,separated,list")
-        config.set(TESTING_PURGE_SECTION, DATABASE_NAME, "test_database")
-        config.set(TESTING_PURGE_SECTION, TEST_MODE, "true")
-        config.add_section(PRODUCTION_SECTION)
-        config.set(PRODUCTION_SECTION, NMAP_HOSTS, "comma,separated,list")
-        config.set(PRODUCTION_SECTION, NESSUS_HOSTS, "comma,separated,list")
-        config.set(PRODUCTION_SECTION, DATABASE_NAME, "test_database")
-        with open(CONFIG_FILENAME, "wb") as config_file:
-            config.write(config_file)
+        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML writer
+        # SafeConfigParser removed (Python 2 only); this method is a stub
+        pass
 
     def __read_config(self):
-        config = SafeConfigParser()
-        config.read([CONFIG_FILENAME])
-        return config
+        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML reader
+        # SafeConfigParser removed (Python 2 only); this method is a stub
+        return None
 
     def __setup_default_owner(self, scheduler):
         """Ensures that a RequestDoc exists in the database for the default owner.
@@ -637,46 +632,38 @@ class Commander(object):
         Returns:
             None
         """
-        if not self.__db.RequestDoc.get_by_owner(DEFAULT_OWNER):
-            self.__logger.info(
-                "%s request document does not exist; creating..." % DEFAULT_OWNER
-            )
-            # Create a new request document populated with default values
-            request = self.__db.RequestDoc()
-            # Customize request document for the default owner
-            request["_id"] = DEFAULT_OWNER
-            request["agency"]["acronym"] = DEFAULT_OWNER
-            request["agency"]["name"] = "Default CyHy system owner"
-            # Remove the location field; it is not required here
-            request["agency"].pop("location")
-            # Enable scanning for default owner
-            request["scan_types"] = [SCAN_TYPE.CYHY]
-            request["scheduler"] = scheduler
-            request.save()
-            self.__logger.info("%s request document created" % DEFAULT_OWNER)
+        # TODO: Phase 4 — replace with db_ops.setup_default_owner(scheduler)
+        # cyhy.db.RequestDoc and cyhy.core.common.DEFAULT_OWNER removed
+        self.__logger.info(
+            "TODO: Phase 4 — setup_default_owner('%s') not yet implemented" % DEFAULT_OWNER
+        )
 
     def do_work(self):
         self.__logger.info("Starting up.")
         self.__setup_directories()
 
         # process configuration
+        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML loading
         if not Path(CONFIG_FILENAME).exists():
-            print >>sys.stderr, 'Configuration file not found: "%s"' % CONFIG_FILENAME
+            print('Configuration file not found: "%s"' % CONFIG_FILENAME, file=sys.stderr)
             self.__write_config()
-            print >>sys.stderr, "A default configuration file was created in the working directory."
-            print >>sys.stderr, "Please edit and relaunch."
+            print("A default configuration file was created in the working directory.", file=sys.stderr)
+            print("Please edit and relaunch.", file=sys.stderr)
             self.__logger.error("Configuration file not found. Exiting.")
             sys.exit(-1)
 
         config = self.__read_config()
-        if self.__config_section == None:
-            config_section = config.get(DEFAULT, DEFAULT_SECTION)
+        # TODO: Phase 3 — all config.get() calls below will be replaced with
+        # CommanderConfig attribute access
+        if self.__config_section is None:
+            config_section = DEFAULT_SECTION
         else:
             config_section = self.__config_section
         self.__logger.info('Reading configuration section: "%s"' % config_section)
 
-        nmap_hosts = config.get(config_section, NMAP_HOSTS).split(",")
-        nessus_hosts = config.get(config_section, NESSUS_HOSTS).split(",")
+        # TODO: Phase 3 — replace these config.get() calls with CommanderConfig fields
+        nmap_hosts = []  # TODO: Phase 3 — config.get(config_section, NMAP_HOSTS).split(",")
+        nessus_hosts = []  # TODO: Phase 3 — config.get(config_section, NESSUS_HOSTS).split(",")
         # remove any duplicates
         nmap_hosts = list(set(nmap_hosts))
         nessus_hosts = list(set(nessus_hosts))
@@ -691,43 +678,50 @@ class Commander(object):
 
         self.__logger.info("nmap hosts: %s" % nmap_hosts)
         self.__logger.info("nessus hosts: %s" % nessus_hosts)
-        jobs_per_nmap_host = config.getint(config_section, JOBS_PER_NMAP_HOST)
+        # TODO: Phase 3 — replace with config.jobs_per_nmap_host
+        jobs_per_nmap_host = 8  # TODO: Phase 3 — config.getint(config_section, JOBS_PER_NMAP_HOST)
         self.__logger.info("Jobs per nmap host: %d", jobs_per_nmap_host)
-        jobs_per_nessus_host = config.getint(config_section, JOBS_PER_NESSUS_HOST)
+        # TODO: Phase 3 — replace with config.jobs_per_nessus_host
+        jobs_per_nessus_host = 8  # TODO: Phase 3 — config.getint(config_section, JOBS_PER_NESSUS_HOST)
         self.__logger.info("Jobs per nessus host: %d", jobs_per_nessus_host)
-        self.__next_scan_limit = config.getint(config_section, NEXT_SCAN_LIMIT)
+        # TODO: Phase 3 — replace with config.next_scan_limit
+        self.__next_scan_limit = 2000  # TODO: Phase 3 — config.getint(config_section, NEXT_SCAN_LIMIT)
         self.__logger.info("Next scan fetch limit: %d", self.__next_scan_limit)
-        self.__poll_interval = config.getint(config_section, POLL_INTERVAL)
+        # TODO: Phase 3 — replace with config.poll_interval
+        self.__poll_interval = 30  # TODO: Phase 3 — config.getint(config_section, POLL_INTERVAL)
         self.__logger.info("Poll interval: %d", self.__poll_interval)
-        db_name = config.get(config_section, DATABASE_NAME)
-        db_uri = config.get(config_section, DATABASE_URI)
+        # TODO: Phase 3 — replace with config.mongodb_database / config.mongodb_uri
+        db_name = "cyhy"  # TODO: Phase 3 — config.get(config_section, DATABASE_NAME)
+        db_uri = "mongodb://localhost:27017/"  # TODO: Phase 3 — config.get(config_section, DATABASE_URI)
         self.__setup_db(db_name, db_uri)
         self.__logger.info("Database: %s", self.__db)
-        self.__test_mode = config.getboolean(config_section, TEST_MODE)
+        # TODO: Phase 3 — replace with config.test_mode
+        self.__test_mode = False  # TODO: Phase 3 — config.getboolean(config_section, TEST_MODE)
         self.__logger.info("Test mode: %s", self.__test_mode)
-        self.__keep_failures = config.getboolean(config_section, KEEP_FAILURES)
-        job_processing_thread_count = config.getint(
-            config_section, JOB_PROCESSING_THREADS
-        )
+        # TODO: Phase 3 — replace with config.keep_failures
+        self.__keep_failures = False  # TODO: Phase 3 — config.getboolean(config_section, KEEP_FAILURES)
+        # TODO: Phase 3 — replace with config.job_processing_threads
+        job_processing_thread_count = 4  # TODO: Phase 3 — config.getint(config_section, JOB_PROCESSING_THREADS)
         self.__logger.info(
             "Number of job processing threads: %d", job_processing_thread_count
         )
         self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
-        self.__keep_successes = config.getboolean(config_section, KEEP_SUCCESSES)
+        # TODO: Phase 3 — replace with config.keep_successes
+        self.__keep_successes = False  # TODO: Phase 3 — config.getboolean(config_section, KEEP_SUCCESSES)
         self.__logger.info("Keep successful jobs: %s", self.__keep_successes)
-        self.__shutdown_when_idle = config.getboolean(
-            config_section, SHUTDOWN_WHEN_IDLE
-        )
+        # TODO: Phase 3 — replace with config.shutdown_when_idle
+        self.__shutdown_when_idle = False  # TODO: Phase 3 — config.getboolean(config_section, SHUTDOWN_WHEN_IDLE)
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
         self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
-        default_scheduler = config.get(config_section, DEFAULT_SCHEDULER)
+        # TODO: Phase 3 — replace with config.default_scheduler
+        default_scheduler = "PERSISTENT1"  # TODO: Phase 3 — config.get(config_section, DEFAULT_SCHEDULER)
         self.__logger.info('Default scheduler: "%s"' % default_scheduler)
         self.__setup_default_owner(default_scheduler)
         self.__setup_sources()
         self.__setup_sinks()
 
-        self.__successful_job_queue = Queue.Queue()
-        self.__failed_job_queue = Queue.Queue()
+        self.__successful_job_queue = queue.Queue()
+        self.__failed_job_queue = queue.Queue()
 
         # spin up the thread pool to process retrieved work
         job_processing_threads = []
@@ -882,7 +876,7 @@ class Commander(object):
                         )
                 self.__check_stop_file()
                 self.__check_database_pause()
-            except Exception, e:
+            except Exception as e:
                 self.__logger.critical(e)
                 self.__logger.critical(traceback.format_exc())
 
@@ -901,34 +895,44 @@ class Commander(object):
         self.__logger.info("Shutting down.")
 
 
-def main():
-    args = docopt(__doc__, version="v2.0.0")
-    workingDir = Path.cwd() / args["<working-dir>"]
+def cli_entry() -> None:
+    """Entry point for the cyhy-commander CLI."""
+    parser = argparse.ArgumentParser(
+        description="CyHy Commander: feeds scanners jobs and processes results."
+    )
+    parser.add_argument("working_dir", help="Working directory for job files")
+    parser.add_argument(
+        "-d", "--debug", action="store_true", help="Enable debug logging"
+    )
+    parser.add_argument(
+        "-l", "--stdout-log", action="store_true", help="Log to standard out"
+    )
+    parser.add_argument(
+        "-s", "--section", default=None, help="Configuration section to use"
+    )
+    args = parser.parse_args()
+    # TODO: Phase 5 — call asyncio.run(main(args))
+
+    workingDir = Path.cwd() / args.working_dir
     if not workingDir.exists():
-        print >>sys.stderr, 'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir)
+        print(
+            'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir),
+            file=sys.stderr,
+        )
         workingDir.mkdir()
     os.chdir(str(workingDir))
-    lock = lockfile.LockFile(str(workingDir / LOCK_FILENAME), timeout=0)
-    if lock.is_locked():
-        print >>sys.stderr, "Cannot start.  There is already a cyhy-commander executing in this working directory."
-        sys.exit(-1)
 
-    commander = Commander(args["--section"], args["--debug"], args["--stdout-log"])
+    commander = Commander(args.section, args.debug, args.stdout_log)
 
-    if args["--background"]:
-        context = daemon.DaemonContext(
-            working_directory=workingDir, umask=0002, pidfile=lock
-        )
-        context.signal_map = {
-            signal.SIGTERM: commander.handle_term,
-            signal.SIGCHLD: signal.SIG_IGN,
-        }
-        with context:
-            commander.do_work()
-    else:
-        signal.signal(signal.SIGTERM, commander.handle_term)
-        signal.signal(signal.SIGINT, commander.handle_term)
-        commander.do_work()
+    signal.signal(signal.SIGTERM, commander.handle_term)
+    signal.signal(signal.SIGINT, commander.handle_term)
+    commander.do_work()
+
+
+# Keep backward-compatible entry point name
+def main():
+    """Backward-compatible entry point; delegates to cli_entry()."""
+    cli_entry()
 
 
 if __name__ == "__main__":
