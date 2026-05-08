@@ -1,15 +1,78 @@
 #!/usr/bin/env python
 
-from nessus_handler import NessusV2ContentHander
+from .nessus_handler import NessusV2ContentHander
 from xml.sax import parse
 from bson.errors import InvalidDocument
 import netaddr
 import gzip
 import logging
 import threading
-from cyhy.core import UNKNOWN_OWNER
-from cyhy.db import CHDatabase, VulnTicketManager
-from cyhy.util import util
+
+# TODO: Replace with cyhy-db models and local modules in Phase 4 (task 4.6)
+# from cyhy.core import UNKNOWN_OWNER
+# from cyhy.db import CHDatabase, VulnTicketManager
+# from cyhy.util import util
+
+# TODO stubs for removed cyhy-core symbols
+UNKNOWN_OWNER = "UNKNOWN"
+
+class _CHDatabaseStub:
+    def __init__(self, db):
+        self._db = db
+
+    def update_host_priority_and_reschedule(self, ip):
+        # TODO: Replace with db_ops equivalent in Phase 4 (task 4.6)
+        raise NotImplementedError("CHDatabase.update_host_priority_and_reschedule not yet migrated")
+
+    def transition_host(self, ip):
+        # TODO: Replace with db_ops.transition_host in Phase 4 (task 4.6)
+        raise NotImplementedError("CHDatabase.transition_host not yet migrated")
+
+CHDatabase = _CHDatabaseStub
+
+class _VulnTicketManagerStub:
+    def __init__(self, db, source, manual_scan=False):
+        self.ips = set()
+        self.ports = set()
+        self.source_ids = set()
+
+    def ready_to_clear_vuln_latest_flags(self):
+        raise NotImplementedError("VulnTicketManager not yet migrated")
+
+    def clear_vuln_latest_flags(self):
+        raise NotImplementedError("VulnTicketManager not yet migrated")
+
+    def open_ticket(self, report, reason):
+        raise NotImplementedError("VulnTicketManager not yet migrated")
+
+    def close_tickets(self):
+        raise NotImplementedError("VulnTicketManager not yet migrated")
+
+VulnTicketManager = _VulnTicketManagerStub
+
+class _UtilStub:
+    @staticmethod
+    def utcnow():
+        # TODO: Replace with datetime.datetime.utcnow() or equivalent in Phase 4
+        import datetime
+        return datetime.datetime.utcnow()
+
+    @staticmethod
+    def copy_attrs(src, dst):
+        # TODO: Replace with direct field assignment in Phase 4 (task 4.6)
+        raise NotImplementedError("util.copy_attrs not yet migrated")
+
+    @staticmethod
+    def range_string_to_list(port_range_string):
+        # TODO: Replace with real implementation in Phase 4 (task 4.6)
+        raise NotImplementedError("util.range_string_to_list not yet migrated")
+
+    @staticmethod
+    def pretty_bail(e, context):
+        # TODO: Replace with proper error handling in Phase 4 (task 4.6)
+        raise NotImplementedError("util.pretty_bail not yet migrated")
+
+util = _UtilStub()
 
 
 """
@@ -160,7 +223,7 @@ class NessusImporter(object):
 
         # some fragile hosts don't list their host_ip
         # fallback to name
-        if parsedHost.has_key("host_ip"):
+        if "host_ip" in parsedHost:
             self.current_ip = netaddr.IPAddress(parsedHost["host_ip"])
             del parsedHost["host_ip"]
         else:

@@ -8,11 +8,77 @@ from xml.sax import parse
 # third-party libraries (install with pip)
 import netaddr
 
+# TODO: Replace with cyhy-db enums and local modules in Phase 4 (task 4.5)
+# from cyhy.core import DEFAULT_OWNER, STAGE, UNKNOWN_OWNER
+# from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
+# from cyhy.util import util
+
+# TODO stubs for removed cyhy-core symbols
+DEFAULT_OWNER = "FEDERAL"
+UNKNOWN_OWNER = "UNKNOWN"
+
+class _STAGEStub:
+    NETSCAN1 = "NETSCAN1"
+    NETSCAN2 = "NETSCAN2"
+    PORTSCAN = "PORTSCAN"
+    BASESCAN = "BASESCAN"
+
+STAGE = _STAGEStub()
+
+class _CHDatabaseStub:
+    def __init__(self, db):
+        self._db = db
+
+    def transition_host(self, ip, up=None, reason=None, has_open_ports=None):
+        # TODO: Replace with db_ops.transition_host in Phase 4 (task 4.5)
+        raise NotImplementedError("CHDatabase.transition_host not yet migrated")
+
+CHDatabase = _CHDatabaseStub
+
+class _IPPortTicketManagerStub:
+    def __init__(self, db, protocols):
+        self.ips = set()
+        self.ports = set()
+
+    def port_open(self, ip, port):
+        raise NotImplementedError("IPPortTicketManager not yet migrated")
+
+    def open_ticket(self, report, reason):
+        raise NotImplementedError("IPPortTicketManager not yet migrated")
+
+    def close_tickets(self):
+        raise NotImplementedError("IPPortTicketManager not yet migrated")
+
+    def clear_vuln_latest_flags(self):
+        raise NotImplementedError("IPPortTicketManager not yet migrated")
+
+IPPortTicketManager = _IPPortTicketManagerStub
+
+class _IPTicketManagerStub:
+    def __init__(self, db):
+        self.ips = set()
+
+    def ip_up(self, ip):
+        raise NotImplementedError("IPTicketManager not yet migrated")
+
+    def close_tickets(self):
+        raise NotImplementedError("IPTicketManager not yet migrated")
+
+    def clear_vuln_latest_flags(self):
+        raise NotImplementedError("IPTicketManager not yet migrated")
+
+IPTicketManager = _IPTicketManagerStub
+
+class _UtilStub:
+    @staticmethod
+    def copy_attrs(src, dst, exclude=None):
+        # TODO: Replace with direct field assignment in Phase 4 (task 4.5)
+        raise NotImplementedError("util.copy_attrs not yet migrated")
+
+util = _UtilStub()
+
 # local libraries
-from cyhy.core import DEFAULT_OWNER, STAGE, UNKNOWN_OWNER
-from cyhy.db import CHDatabase, IPPortTicketManager, IPTicketManager
-from cyhy.util import util
-from nmap_handler import NmapContentHandler
+from .nmap_handler import NmapContentHandler
 
 RISKY_SERVICES_SOURCE_ID = 1  # Identifier for "risky service" tickets
 # Pulled from https://svn.nmap.org/nmap/nmap-services
@@ -65,7 +131,7 @@ class NmapImporter(object):
             self.__ticket_manager = IPPortTicketManager(
                 db, ["tcp"]
             )  # Nmap is only scanning TCP ports; don't close non-TCP ports.
-            self.__ticket_manager.ports = xrange(
+            self.__ticket_manager.ports = range(
                 1, 65536
             )  # A PORTSCAN is all ports.  Don't consider port 0 in scope.
         elif stage == STAGE.BASESCAN:
@@ -80,7 +146,6 @@ class NmapImporter(object):
     def process(self, nmap_filename, target_filename):
         """Imports nmap files created from netscans and portscans"""
         # import target ips
-        ips = netaddr.IPSet()
         with open(target_filename) as f:
             for ip_line in f:
                 self.__ticket_manager.ips.add(ip_line)
@@ -88,7 +153,7 @@ class NmapImporter(object):
         f = open(nmap_filename, "rb")
         # sometimes the first line of the nmap output is not xml
         firstLine = f.readline()
-        if firstLine.startswith("<?xml"):
+        if firstLine.startswith(b"<?xml"):
             f.seek(0)
         parse(f, self.handler)
         f.close()
@@ -175,7 +240,7 @@ class NmapImporter(object):
 
     def __store_os_details(self, parsed_host):
         details = dict()
-        if parsed_host.has_key("os"):
+        if "os" in parsed_host:
             util.copy_attrs(parsed_host["os"], details)
             details["line"] = int(details["line"])
             details["accuracy"] = int(details["accuracy"])

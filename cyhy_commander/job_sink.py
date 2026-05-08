@@ -2,8 +2,30 @@ import os
 import glob
 import logging
 import random
-from cyhy.core import *
-from cyhy.db import CHDatabase
+
+# TODO: Replace with cyhy-db enums in Phase 4 (task 4.4)
+# from cyhy.core import *
+# from cyhy.db import CHDatabase
+
+# TODO stubs for removed cyhy-core symbols
+class _STAGEStub:
+    NETSCAN1 = "NETSCAN1"
+    NETSCAN2 = "NETSCAN2"
+    PORTSCAN = "PORTSCAN"
+    VULNSCAN = "VULNSCAN"
+
+STAGE = _STAGEStub()
+
+class _CHDatabaseStub:
+    def __init__(self, db):
+        self._db = db
+
+    def transition_host(self, ip, up=None, was_failure=False):
+        # TODO: Replace with db_ops.transition_host in Phase 4 (task 4.4)
+        raise NotImplementedError("CHDatabase.transition_host not yet migrated")
+
+CHDatabase = _CHDatabaseStub
+
 from cyhy_commander.nmap import NmapImporter
 from cyhy_commander.nessus import NessusImporter
 

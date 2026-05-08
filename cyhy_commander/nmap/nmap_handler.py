@@ -2,7 +2,16 @@ from xml.sax import ContentHandler, parse, SAXNotRecognizedException
 from xml.parsers.expat import ExpatError
 import datetime
 import netaddr
-from cyhy.util import copy_attrs
+
+
+def copy_attrs(source, dest, skip=None):
+    """Copy attributes from source to dest, skipping keys in skip list."""
+    if skip is None:
+        skip = []
+    for k, v in source.items():
+        if k in skip:
+            continue
+        dest[k] = v
 
 
 class NmapContentHandler(ContentHandler):
@@ -34,7 +43,7 @@ class NmapContentHandler(ContentHandler):
         elif name == "host":
             self.first_osmatch_done_for_host = False
             self.currentHost = {"ports": {}}
-            if attrs.has_key("starttime"):
+            if "starttime" in attrs:
                 self.currentHost["starttime"] = datetime.datetime.utcfromtimestamp(
                     int(attrs["starttime"])
                 )
@@ -83,20 +92,20 @@ class NmapContentHandler(ContentHandler):
             self.cpeTarget = clazz
         elif name == "taskbegin":
             # save start time for hosts that don't have a time reported
-            if attrs.has_key("time"):
+            if "time" in attrs:
                 self.taskStartTime = datetime.datetime.utcfromtimestamp(
                     int(attrs["time"])
                 )
         elif name == "taskend":
             # save end time for hosts that don't have a time reported
-            if attrs.has_key("time"):
+            if "time" in attrs:
                 self.taskEndTime = datetime.datetime.utcfromtimestamp(
                     int(attrs["time"])
                 )
 
     def endElement(self, name):
         if name == "cpe" and not self.first_osmatch_done_for_host:
-            if not self.cpeTarget.has_key("cpe"):
+            if "cpe" not in self.cpeTarget:
                 self.cpeTarget["cpe"] = []
             self.cpeTarget["cpe"].append(self.chars)
         elif name == "host":

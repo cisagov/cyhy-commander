@@ -2,9 +2,48 @@ import os
 import shutil
 import tempfile
 
-from cyhy.core import *
-from cyhy.db import CHDatabase
-from cyhy import util
+# TODO: Replace with cyhy-db enums in Phase 4 (task 4.3)
+# from cyhy.core import *
+# from cyhy.db import CHDatabase
+# from cyhy import util
+
+# TODO stubs for removed cyhy-core symbols
+class _STAGEStub:
+    NETSCAN1 = "NETSCAN1"
+    NETSCAN2 = "NETSCAN2"
+    PORTSCAN = "PORTSCAN"
+    VULNSCAN = "VULNSCAN"
+
+STAGE = _STAGEStub()
+
+class _STATUSStub:
+    READY = "READY"
+
+STATUS = _STATUSStub()
+
+class _CHDatabaseStub:
+    def __init__(self, db):
+        self._db = db
+
+    def fetch_ready_hosts(self, count, stage):
+        # TODO: Replace with db_ops.fetch_ready_hosts in Phase 4 (task 4.3)
+        raise NotImplementedError("CHDatabase.fetch_ready_hosts not yet migrated")
+
+CHDatabase = _CHDatabaseStub
+
+class _UtilStub:
+    @staticmethod
+    def utcnow():
+        # TODO: Replace with datetime.datetime.utcnow() or equivalent in Phase 4
+        import datetime
+        return datetime.datetime.utcnow()
+
+    @staticmethod
+    def list_to_range_string(ports):
+        # TODO: Replace with real implementation in Phase 4 (task 4.3)
+        raise NotImplementedError("util.list_to_range_string not yet migrated")
+
+util = _UtilStub()
 
 JOB_FILENAME = "job"
 PORTS_FILE_NAME = "ports"
@@ -90,12 +129,12 @@ class DatabaseJobSource(JobSource):
                 # include all hostnames if present, otherwise use IP alone
                 if host.get("hostnames"):
                     for h in host["hostnames"]:
-                        print >> target_file, "%s[%s]" % (h["hostname"], host["ip"])
+                        print("%s[%s]" % (h["hostname"], host["ip"]), file=target_file)
                 else:
-                    print >> target_file, host["ip"]
+                    print(host["ip"], file=target_file)
         else:
             for host in hosts:
-                print >> target_file, host["ip"]
+                print(host["ip"], file=target_file)
 
         target_file.close()
 
@@ -106,7 +145,7 @@ class DatabaseJobSource(JobSource):
             ports_string = util.list_to_range_string(ports)
             ports_path = os.path.join(job_path, PORTS_FILE_NAME)
             ports_file = open(ports_path, "w")
-            print >> ports_file, ports_string
+            print(ports_string, file=ports_file)
             ports_file.close()
 
         # return path to the job
