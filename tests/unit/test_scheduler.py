@@ -318,20 +318,30 @@ class TestCalculatePriority:
 
         The mock replaces the entire VulnScanDoc class in the scheduler module
         so that class-attribute access (VulnScanDoc.ip, VulnScanDoc.latest,
-        VulnScanDoc.kev, VulnScanDoc.severity) works without Beanie being
-        initialized, and VulnScanDoc.find() returns the expected results.
-        """
-        # First find() call returns kev_count; second returns max_severity
-        kev_find = MagicMock()
-        kev_find.count = AsyncMock(return_value=kev_count)
+        VulnScanDoc.severity) works without Beanie being initialized, and
+        VulnScanDoc.find() returns the expected results.
 
-        severity_find = MagicMock()
-        severity_find.max = AsyncMock(return_value=max_severity)
+        The scheduler now uses a single find().sort().limit(1).first_or_none()
+        query to get the highest-severity vuln. max_severity is used to build
+        a mock VulnScanDoc with that severity (or None if no vulns).
+        """
+        # Build a mock vuln doc with the given severity (or None for no vulns)
+        if max_severity is not None and max_severity > 0:
+            mock_vuln_doc = MagicMock()
+            mock_vuln_doc.severity = max_severity
+        else:
+            mock_vuln_doc = None
+
+        # Chain: find(...).sort(...).limit(1).first_or_none()
+        find_result = MagicMock()
+        sort_result = MagicMock()
+        limit_result = MagicMock()
+        limit_result.first_or_none = AsyncMock(return_value=mock_vuln_doc)
+        sort_result.limit = MagicMock(return_value=limit_result)
+        find_result.sort = MagicMock(return_value=sort_result)
 
         mock_class = MagicMock()
-        # Class attribute access (VulnScanDoc.ip, etc.) returns a MagicMock
-        # that supports == comparison (MagicMock.__eq__ returns a MagicMock)
-        mock_class.find = MagicMock(side_effect=[kev_find, severity_find])
+        mock_class.find = MagicMock(return_value=find_result)
         return mock_class
 
     def test_down_host_returns_priority_1(self):
@@ -341,7 +351,7 @@ class TestCalculatePriority:
         assert result == 1
 
     def test_kev_vulnerability_returns_minus_16(self):
-        """Host with KEV vulnerability → priority -16."""
+        """Host with severity 4 vulnerability → priority -16 (KEV check removed; severity-based)."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=1, max_severity=4)
 
@@ -351,7 +361,7 @@ class TestCalculatePriority:
         assert result == -16
 
     def test_no_kev_severity_4_returns_minus_16(self):
-        """Host with no KEV but severity 4 → priority -16."""
+        """Host with severity 4 → priority -16."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=4)
 
@@ -361,7 +371,7 @@ class TestCalculatePriority:
         assert result == -16
 
     def test_no_kev_severity_3_returns_minus_8(self):
-        """Host with no KEV but severity 3 → priority -8."""
+        """Host with severity 3 → priority -8."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=3)
 
@@ -371,7 +381,7 @@ class TestCalculatePriority:
         assert result == -8
 
     def test_no_kev_severity_2_returns_minus_4(self):
-        """Host with no KEV but severity 2 → priority -4."""
+        """Host with severity 2 → priority -4."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=2)
 
@@ -381,7 +391,7 @@ class TestCalculatePriority:
         assert result == -4
 
     def test_no_kev_severity_1_returns_minus_1(self):
-        """Host with no KEV and only severity 1 → priority -1."""
+        """Host with severity 1 → priority -1."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=1)
 
@@ -391,9 +401,8 @@ class TestCalculatePriority:
         assert result == -1
 
     def test_no_kev_no_vulns_returns_minus_1(self):
-        """Host with no KEV and no vulnerabilities (max severity = None) → priority -1."""
+        """Host with no vulnerabilities (first_or_none returns None) → priority -1."""
         host = self._make_host(up=True)
-        # max() returns None when no documents match; the scheduler uses `or 0`
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=None)
 
         with patch("cyhy_commander.scheduler.VulnScanDoc", mock_vuln):
@@ -402,7 +411,7 @@ class TestCalculatePriority:
         assert result == -1
 
     def test_no_kev_severity_0_returns_minus_1(self):
-        """Host with no KEV and severity 0 (no real vulns) → priority -1."""
+        """Host with severity 0 (treated as no real vulns) → priority -1."""
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=0)
 

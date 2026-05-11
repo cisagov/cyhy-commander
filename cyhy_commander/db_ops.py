@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from ipaddress import IPv4Address
 
 # Third-party libraries
-from beanie.operators import Set
+from beanie.operators import In, Set
 from cyhy_db.models import HostDoc, RequestDoc, TallyDoc, SystemControlDoc
 from cyhy_db.models.enum import (
     ControlAction,
@@ -91,7 +91,7 @@ async def fetch_ready_hosts(
 
     # Atomically mark all fetched hosts as RUNNING.
     ip_list = [host.ip for host in hosts]
-    await HostDoc.find(HostDoc.ip.in_(ip_list)).update(
+    await HostDoc.find(In(HostDoc.ip, ip_list)).update(
         Set({HostDoc.status: Status.RUNNING})
     )
 
@@ -215,7 +215,7 @@ async def balance_ready_hosts() -> None:
             # Count currently active (RUNNING + READY) hosts for this org.
             active_count: int = await HostDoc.find(
                 HostDoc.owner == owner,
-                HostDoc.status.in_([Status.RUNNING, Status.READY]),
+                In(HostDoc.status, [Status.RUNNING, Status.READY]),
             ).count()
 
             slots_available = limit - active_count
@@ -241,7 +241,7 @@ async def balance_ready_hosts() -> None:
             continue
 
         ip_list = [h.ip for h in waiting_hosts]
-        await HostDoc.find(HostDoc.ip.in_(ip_list)).update(
+        await HostDoc.find(In(HostDoc.ip, ip_list)).update(
             Set({HostDoc.status: Status.READY})
         )
         logger.debug(

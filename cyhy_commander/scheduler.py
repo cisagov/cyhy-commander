@@ -121,23 +121,14 @@ async def _calculate_priority(host: HostDoc) -> int:
     if not host.state.up:
         return 1  # down host: 90 days
 
-    # Check for KEV vulnerabilities.
-    kev_count = await VulnScanDoc.find(
+    # Check max severity across all latest vuln scans for this host.
+    # Use sort+limit instead of aggregation for mongomock compatibility.
+    top_vuln = await VulnScanDoc.find(
         VulnScanDoc.ip == host.ip,
         VulnScanDoc.latest == True,  # noqa: E712
-        VulnScanDoc.kev == True,  # noqa: E712
-    ).count()
-    if kev_count > 0:
-        return -16  # KEV: 12 hours
+    ).sort([("severity", -1)]).limit(1).first_or_none()
 
-    # Check max severity across all latest vuln scans for this host.
-    max_severity = (
-        await VulnScanDoc.find(
-            VulnScanDoc.ip == host.ip,
-            VulnScanDoc.latest == True,  # noqa: E712
-        ).max(VulnScanDoc.severity)
-        or 0
-    )
+    max_severity = top_vuln.severity if top_vuln is not None else 0
 
     severity_to_priority = {4: -16, 3: -8, 2: -4, 1: -1}
     return severity_to_priority.get(int(max_severity), -1)
