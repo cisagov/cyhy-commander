@@ -16,7 +16,14 @@ from ipaddress import IPv4Address
 
 # Third-party libraries
 from bson import ObjectId
-from cyhy_db.models import KEVDoc, NotificationDoc, PortScanDoc, TicketDoc, VulnScanDoc
+from cyhy_db.models import (
+    KEVDoc,
+    NotificationDoc,
+    PortScanDoc,
+    SnapshotDoc,
+    TicketDoc,
+    VulnScanDoc,
+)
 from cyhy_db.models.enum import TicketAction
 
 logger = logging.getLogger(__name__)
@@ -35,6 +42,25 @@ _HOST_TICKET_PORT: int = 0
 def _utcnow() -> datetime:
     """Return the current UTC time as a timezone-aware datetime."""
     return datetime.now(timezone.utc)
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Return *dt* as a timezone-aware UTC datetime.
+
+    If *dt* is already timezone-aware, it is returned unchanged.  If it is
+    naive (no tzinfo), it is assumed to be UTC and given an explicit UTC
+    timezone.  This handles the case where mongomock strips timezone
+    information from stored datetimes.
+
+    Args:
+        dt: The datetime to normalise.
+
+    Returns:
+        A timezone-aware datetime in UTC.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 async def _is_kev(cve_id: str) -> bool:
@@ -120,7 +146,7 @@ class VulnTicketManager:
             else:
                 # Existing closed ticket — check if within reopen window.
                 reopen_cutoff = _utcnow() - timedelta(days=self.REOPEN_WINDOW_DAYS)
-                if existing.time_closed and existing.time_closed >= reopen_cutoff:
+                if existing.time_closed and _as_utc(existing.time_closed) >= reopen_cutoff:
                     await self._reopen_ticket(existing, vuln, snapshot_id)
                 else:
                     # Outside reopen window — open a fresh ticket.
@@ -135,7 +161,7 @@ class VulnTicketManager:
 
             # Handle false positive expiration before deciding action.
             if ticket.false_positive and ticket.fp_expiration_date:
-                if ticket.fp_expiration_date <= _utcnow():
+                if _as_utc(ticket.fp_expiration_date) <= _utcnow():
                     await self._expire_false_positive(ticket)
                     # After expiration, treat as a normal open ticket.
                     await self._close_ticket(ticket, snapshot_id)
@@ -184,7 +210,7 @@ class VulnTicketManager:
             time=now,
         )
         if snapshot_id is not None:
-            ticket.snapshots = [snapshot_id]  # type: ignore[list-item]
+            ticket.snapshots = [_snapshot_link(snapshot_id)]
 
         await ticket.save()
         logger.debug(
@@ -225,10 +251,10 @@ class VulnTicketManager:
             reference=vuln.id,
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -266,10 +292,10 @@ class VulnTicketManager:
             reference=vuln.id,
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -301,10 +327,10 @@ class VulnTicketManager:
             reason="vulnerability no longer detected",
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -473,7 +499,7 @@ class IPPortTicketManager:
                 await self._verify_ticket(existing, port_scan, snapshot_id)
             else:
                 reopen_cutoff = _utcnow() - timedelta(days=self.REOPEN_WINDOW_DAYS)
-                if existing.time_closed and existing.time_closed >= reopen_cutoff:
+                if existing.time_closed and _as_utc(existing.time_closed) >= reopen_cutoff:
                     await self._reopen_ticket(existing, port_scan, snapshot_id)
                 else:
                     await self._open_ticket(port_scan, snapshot_id)
@@ -530,7 +556,7 @@ class IPPortTicketManager:
             time=now,
         )
         if snapshot_id is not None:
-            ticket.snapshots = [snapshot_id]  # type: ignore[list-item]
+            ticket.snapshots = [_snapshot_link(snapshot_id)]
 
         await ticket.save()
         logger.debug(
@@ -562,10 +588,10 @@ class IPPortTicketManager:
             reference=port_scan.id,
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -598,10 +624,10 @@ class IPPortTicketManager:
             reference=port_scan.id,
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -630,10 +656,10 @@ class IPPortTicketManager:
             reason="port no longer detected as open",
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -728,10 +754,10 @@ class IPTicketManager:
             reason="host no longer up",
             time=now,
         )
-        if snapshot_id is not None and snapshot_id not in (ticket.snapshots or []):
+        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
             if ticket.snapshots is None:
                 ticket.snapshots = []
-            ticket.snapshots.append(snapshot_id)  # type: ignore[arg-type]
+            ticket.snapshots.append(_snapshot_link(snapshot_id))
 
         await ticket.save()
         logger.debug(
@@ -811,6 +837,52 @@ def _port_details(port_scan: PortScanDoc) -> dict:
         "service": port_scan.service,
         "state": port_scan.state,
     }
+
+
+def _snapshot_link(snapshot_id: ObjectId) -> SnapshotDoc:
+    """Wrap a raw ObjectId in a minimal SnapshotDoc suitable for use as a Beanie link.
+
+    Beanie's ``list[Link[SnapshotDoc]]`` field requires document instances (or
+    their DBRef equivalents), not bare ``ObjectId`` values.  This helper
+    constructs a lightweight proxy that Beanie can serialise as a DBRef without
+    requiring the snapshot to exist in the database.
+
+    Args:
+        snapshot_id: The ObjectId of the snapshot to reference.
+
+    Returns:
+        A SnapshotDoc instance with only the ``id`` field populated.
+    """
+    return SnapshotDoc.model_construct(id=snapshot_id)
+
+
+def _snapshot_id_in_links(
+    snapshot_id: ObjectId,
+    links: list | None,
+) -> bool:
+    """Return True if *snapshot_id* is already referenced in *links*.
+
+    Handles both resolved ``SnapshotDoc`` instances and unresolved
+    ``beanie.odm.fields.Link`` proxy objects that expose a ``.ref.id``
+    attribute.
+
+    Args:
+        snapshot_id: The ObjectId to search for.
+        links: The current value of ``ticket.snapshots`` (may be None or empty).
+
+    Returns:
+        True if the snapshot is already in the list, False otherwise.
+    """
+    if not links:
+        return False
+    for item in links:
+        # Resolved document
+        if isinstance(item, SnapshotDoc) and item.id == snapshot_id:
+            return True
+        # Unresolved Link proxy (beanie.odm.fields.Link)
+        if hasattr(item, "ref") and item.ref.id == snapshot_id:
+            return True
+    return False
 
 
 def _extract_cve_id(vuln: VulnScanDoc) -> str | None:
