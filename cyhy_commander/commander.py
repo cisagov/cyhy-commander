@@ -6,6 +6,7 @@ Feeds scanners jobs, processes output, and stores results in database.
 """
 
 import argparse
+import asyncio
 from collections import defaultdict
 import logging
 import os
@@ -20,20 +21,20 @@ import threading
 import time
 import traceback
 
+import cyhy_db
 from cyhy_config import get_config
 
 from .config_model import CommanderConfig
-
-# TODO: Phase 4 — replace with cyhy_db.initialize_db
-# from cyhy.db import CHDatabase, database  (removed)
+from . import db_ops
 
 # TODO: Phase 6 — replace with cyhy-logging setup_logging
 # from cyhy.util import setup_logging  (removed)
 
-# Stubs for cyhy.core symbols removed in Phase 4
-DEFAULT_OWNER = "FEDERAL"  # TODO: replace with cyhy_db constant or config value
+# Default owner constant — "ownerless" hosts belong to this org.
+# Sourced from db_ops to keep a single definition.
+DEFAULT_OWNER = db_ops.DEFAULT_OWNER
 
-# TODO: replace with cyhy_db.models.enum.Stage
+# TODO: task 4.2 — replace with cyhy_db.models.enum.Stage
 class _StageStub:
     NETSCAN1 = "NETSCAN1"
     NETSCAN2 = "NETSCAN2"
@@ -42,26 +43,26 @@ class _StageStub:
 
 STAGE = _StageStub()
 
-# TODO: replace with cyhy_db.models.enum.ScanType
+# TODO: task 4.2 — replace with cyhy_db.models.enum.ScanType
 class _ScanTypeStub:
     CYHY = "CYHY"
 
 SCAN_TYPE = _ScanTypeStub()
 
-# TODO: Phase 4 — replace with cyhy_db.models.RequestDoc / db_ops
-# CHDatabase stub — methods used in do_work() will be replaced in Phase 4
+# TODO: task 4.2 — replace CHDatabase method calls with db_ops.*
+# CHDatabase stub — methods used in do_work() will be replaced in task 4.2
 class _CHDatabaseStub:
     def __init__(self, *args, **kwargs):
         pass
 
     def check_host_next_scans(self):
-        pass  # TODO: Phase 4 — replace with db_ops.check_host_next_scans()
+        pass  # TODO: task 4.2 — replace with db_ops.check_host_next_scans()
 
     def balance_ready_hosts(self):
-        pass  # TODO: Phase 4 — replace with db_ops.balance_ready_hosts()
+        pass  # TODO: task 4.2 — replace with db_ops.balance_ready_hosts()
 
     def should_commander_pause(self):
-        return False  # TODO: Phase 4 — replace with db_ops.should_commander_pause()
+        return False  # TODO: task 4.2 — replace with db_ops.should_commander_pause()
 
 CHDatabase = _CHDatabaseStub
 
@@ -157,10 +158,17 @@ class Commander(object):
                 path.mkdir(parents=True)
 
 
-    def __setup_db(self, db_name, uri):
-        # TODO: Phase 4 — replace with await cyhy_db.initialize_db(uri, db_name)
-        self.__db = None  # TODO: Phase 4 — real DB connection
-        self.__ch_db = CHDatabase(self.__db, next_scan_limit=self.__next_scan_limit)
+    async def __setup_db(self, uri: str, db_name: str) -> None:
+        """Initialize the cyhy-db connection using Beanie/Motor.
+
+        Calls ``cyhy_db.initialize_db`` which creates an AsyncMongoClient,
+        selects the named database, and registers all Beanie document models.
+        After this call all Beanie document classes are ready for async queries.
+        """
+        self.__db = await cyhy_db.initialize_db(uri, db_name)
+        # TODO: task 4.2 — remove _CHDatabaseStub once all CHDatabase calls
+        # are replaced with db_ops.* equivalents.
+        self.__ch_db = CHDatabase(next_scan_limit=self.__next_scan_limit)
 
     def __setup_sources(self):
         if self.__test_mode:
@@ -560,33 +568,17 @@ class Commander(object):
             time.sleep(self.__log_output_sleep_duration)
             self.__check_stop_file()
 
-    def __setup_default_owner(self, scheduler):
-        """Ensures that a RequestDoc exists in the database for the default owner.
+    async def __setup_default_owner(self, scheduler: str) -> None:
+        """Ensure a RequestDoc exists in the database for the default owner.
 
-        This function checks if a RequestDoc for the default owner exists, and
-        if not, creates one with default values.  This function also enables
-        scanning for the default owner and sets the scheduler as specified.
-
-        The default owner owns all "ownerless" HostDocs.  The default owner's
-        RequestDoc does not have a valid list of networks (IP addresses), but it
-        does have scan windows and concurrency settings.  Those "ownerless"
-        HostDocs are created when a CyHy entity has a hostname that resolves to
-        IP addresses that are not already owned by a CyHy entity.  This is how
-        we account for cases where an entity owns a hostname, but not
-        necessarily the IP addresses that it resolves to.
+        Delegates to ``db_ops.setup_default_owner`` which creates a RequestDoc
+        with default values if one does not already exist.
 
         Args:
-            scheduler (str): The scheduler value to assign to the default
-            owner's RequestDoc.
-
-        Returns:
-            None
+            scheduler: The scheduler value to assign to the default owner's
+                RequestDoc (e.g. ``"PERSISTENT1"``).
         """
-        # TODO: Phase 4 — replace with db_ops.setup_default_owner(scheduler)
-        # cyhy.db.RequestDoc and cyhy.core.common.DEFAULT_OWNER removed
-        self.__logger.info(
-            "TODO: Phase 4 — setup_default_owner('%s') not yet implemented" % DEFAULT_OWNER
-        )
+        await db_ops.setup_default_owner(scheduler)
 
     def do_work(self):
         self.__logger.info("Starting up.")
@@ -607,7 +599,7 @@ class Commander(object):
         self.__logger.info("Jobs per nessus host: %d", jobs_per_nessus_host)
         self.__logger.info("Next scan fetch limit: %d", self.__next_scan_limit)
         self.__logger.info("Poll interval: %d", self.__config.poll_interval)
-        self.__setup_db(config.mongodb_database, config.mongodb_uri)
+        asyncio.run(self.__setup_db(config.mongodb_uri, config.mongodb_database))
         self.__logger.info("Database: %s", self.__db)
         self.__logger.info("Test mode: %s", self.__test_mode)
         self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
@@ -620,7 +612,7 @@ class Commander(object):
         self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
         default_scheduler = "PERSISTENT1"
         self.__logger.info('Default scheduler: "%s"' % default_scheduler)
-        self.__setup_default_owner(default_scheduler)
+        asyncio.run(self.__setup_default_owner(default_scheduler))
         self.__setup_sources()
         self.__setup_sinks()
 
