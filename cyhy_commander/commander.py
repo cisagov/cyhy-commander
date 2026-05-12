@@ -23,6 +23,7 @@ import traceback
 
 import cyhy_db
 from cyhy_config import get_config
+from cyhy_db.models.enum import ScanType, Stage
 
 from .config_model import CommanderConfig
 from . import db_ops
@@ -33,38 +34,6 @@ from . import db_ops
 # Default owner constant — "ownerless" hosts belong to this org.
 # Sourced from db_ops to keep a single definition.
 DEFAULT_OWNER = db_ops.DEFAULT_OWNER
-
-# TODO: task 4.2 — replace with cyhy_db.models.enum.Stage
-class _StageStub:
-    NETSCAN1 = "NETSCAN1"
-    NETSCAN2 = "NETSCAN2"
-    PORTSCAN = "PORTSCAN"
-    VULNSCAN = "VULNSCAN"
-
-STAGE = _StageStub()
-
-# TODO: task 4.2 — replace with cyhy_db.models.enum.ScanType
-class _ScanTypeStub:
-    CYHY = "CYHY"
-
-SCAN_TYPE = _ScanTypeStub()
-
-# TODO: task 4.2 — replace CHDatabase method calls with db_ops.*
-# CHDatabase stub — methods used in do_work() will be replaced in task 4.2
-class _CHDatabaseStub:
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def check_host_next_scans(self):
-        pass  # TODO: task 4.2 — replace with db_ops.check_host_next_scans()
-
-    def balance_ready_hosts(self):
-        pass  # TODO: task 4.2 — replace with db_ops.balance_ready_hosts()
-
-    def should_commander_pause(self):
-        return False  # TODO: task 4.2 — replace with db_ops.should_commander_pause()
-
-CHDatabase = _CHDatabaseStub
 
 from .job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
 from .job_source import DirectoryJobSource, DatabaseJobSource
@@ -166,9 +135,6 @@ class Commander(object):
         After this call all Beanie document classes are ready for async queries.
         """
         self.__db = await cyhy_db.initialize_db(uri, db_name)
-        # TODO: task 4.2 — remove _CHDatabaseStub once all CHDatabase calls
-        # are replaced with db_ops.* equivalents.
-        self.__ch_db = CHDatabase(next_scan_limit=self.__next_scan_limit)
 
     def __setup_sources(self):
         if self.__test_mode:
@@ -176,7 +142,7 @@ class Commander(object):
                 DatabaseJobSource(
                     SLEEP_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.NETSCAN1,
+                    job_type=Stage.NETSCAN1,
                     count=self.__config.job_sizing.netscan1,
                 )
             )
@@ -184,7 +150,7 @@ class Commander(object):
                 DatabaseJobSource(
                     SLEEP_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.NETSCAN2,
+                    job_type=Stage.NETSCAN2,
                     count=self.__config.job_sizing.netscan2,
                 )
             )
@@ -192,7 +158,7 @@ class Commander(object):
                 DatabaseJobSource(
                     SLEEP_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.PORTSCAN,
+                    job_type=Stage.PORTSCAN,
                     count=self.__config.job_sizing.portscan,
                 )
             )
@@ -200,7 +166,7 @@ class Commander(object):
                 DatabaseJobSource(
                     SLEEP_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.VULNSCAN,
+                    job_type=Stage.VULNSCAN,
                     count=self.__config.job_sizing.vulnscan,
                 )
             )
@@ -210,7 +176,7 @@ class Commander(object):
                 DatabaseJobSource(
                     NETSCAN1_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.NETSCAN1,
+                    job_type=Stage.NETSCAN1,
                     count=self.__config.job_sizing.netscan1,
                 )
             )
@@ -218,7 +184,7 @@ class Commander(object):
                 DatabaseJobSource(
                     NETSCAN2_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.NETSCAN2,
+                    job_type=Stage.NETSCAN2,
                     count=self.__config.job_sizing.netscan2,
                 )
             )
@@ -226,7 +192,7 @@ class Commander(object):
                 DatabaseJobSource(
                     PORTSCAN_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.PORTSCAN,
+                    job_type=Stage.PORTSCAN,
                     count=self.__config.job_sizing.portscan,
                 )
             )
@@ -234,7 +200,7 @@ class Commander(object):
                 DatabaseJobSource(
                     VULNSCAN_JOB_FILE,
                     self.__db,
-                    job_type=STAGE.VULNSCAN,
+                    job_type=Stage.VULNSCAN,
                     count=self.__config.job_sizing.vulnscan,
                 )
             )
@@ -244,9 +210,9 @@ class Commander(object):
             noop_sink = NoOpSink(self.__db)
             self.__success_sinks.append(noop_sink)
         else:
-            netscan1_sink = NmapSink(self.__db, STAGE.NETSCAN1)
-            netscan2_sink = NmapSink(self.__db, STAGE.NETSCAN2)
-            portscan_sink = NmapSink(self.__db, STAGE.PORTSCAN)
+            netscan1_sink = NmapSink(self.__db, Stage.NETSCAN1)
+            netscan2_sink = NmapSink(self.__db, Stage.NETSCAN2)
+            portscan_sink = NmapSink(self.__db, Stage.PORTSCAN)
             vulnscan_sink = NessusSink(self.__db)
             self.__success_sinks.extend(
                 (netscan1_sink, netscan2_sink, portscan_sink, vulnscan_sink)
@@ -563,7 +529,7 @@ class Commander(object):
             self.__is_running = False
 
     def __check_database_pause(self):
-        while self.__ch_db.should_commander_pause() and self.__is_running:
+        while asyncio.run(db_ops.should_commander_pause()) and self.__is_running:
             self.__logger.info("Commander is paused due to database request.")
             time.sleep(self.__log_output_sleep_duration)
             self.__check_stop_file()
@@ -738,11 +704,11 @@ class Commander(object):
                 self.__logger.debug(
                     "Checking for scheduled DONE hosts to mark WAITING."
                 )
-                self.__ch_db.check_host_next_scans()
+                asyncio.run(db_ops.check_host_next_scans())
 
                 # balance the number of hosts that are ready and running
                 self.__logger.debug("Balancing READY status of hosts.")
-                self.__ch_db.balance_ready_hosts()
+                asyncio.run(db_ops.balance_ready_hosts())
 
                 # push out new work and count
                 self.__logger.debug("Checking sources for new jobs")
