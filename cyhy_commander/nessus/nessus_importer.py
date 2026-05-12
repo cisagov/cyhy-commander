@@ -1,360 +1,389 @@
 #!/usr/bin/env python
 
-from .nessus_handler import NessusV2ContentHander
-from xml.sax import parse
-from bson.errors import InvalidDocument
-import netaddr
-import gzip
+"""Imports Nessus XML scan results into the database.
+
+Parses Nessus v2 XML produced by vulnerability scans, stores VulnScanDoc
+records, manages vulnerability tickets, and transitions host state.
+
+Requirements: FR-1.4, MR-2.8, AC-5.3
+"""
+
+# Standard Python Libraries
 import logging
-import threading
+from datetime import datetime, timezone
+from ipaddress import IPv4Address
+from xml.sax import parse
 
-# TODO: Replace with cyhy-db models and local modules in Phase 4 (task 4.6)
-# from cyhy.core import UNKNOWN_OWNER
-# from cyhy.db import CHDatabase, VulnTicketManager
-# from cyhy.util import util
+# Third-party libraries
+import netaddr
 
-# TODO stubs for removed cyhy-core symbols
+# cyhy-db models and enums
+from cyhy_db.models import HostDoc, VulnScanDoc
+from cyhy_db.models.enum import Protocol
+
+# Local modules
+from .. import db_ops
+from ..ticket_manager import VulnTicketManager
+
+# Local nessus handler
+from .nessus_handler import NessusV2ContentHander
+
 UNKNOWN_OWNER = "UNKNOWN"
 
-class _CHDatabaseStub:
-    def __init__(self, db):
-        self._db = db
 
-    def update_host_priority_and_reschedule(self, ip):
-        # TODO: Replace with db_ops equivalent in Phase 4 (task 4.6)
-        raise NotImplementedError("CHDatabase.update_host_priority_and_reschedule not yet migrated")
-
-    def transition_host(self, ip):
-        # TODO: Replace with db_ops.transition_host in Phase 4 (task 4.6)
-        raise NotImplementedError("CHDatabase.transition_host not yet migrated")
-
-CHDatabase = _CHDatabaseStub
-
-class _VulnTicketManagerStub:
-    def __init__(self, db, source, manual_scan=False):
-        self.ips = set()
-        self.ports = set()
-        self.source_ids = set()
-
-    def ready_to_clear_vuln_latest_flags(self):
-        raise NotImplementedError("VulnTicketManager not yet migrated")
-
-    def clear_vuln_latest_flags(self):
-        raise NotImplementedError("VulnTicketManager not yet migrated")
-
-    def open_ticket(self, report, reason):
-        raise NotImplementedError("VulnTicketManager not yet migrated")
-
-    def close_tickets(self):
-        raise NotImplementedError("VulnTicketManager not yet migrated")
-
-VulnTicketManager = _VulnTicketManagerStub
-
-class _UtilStub:
-    @staticmethod
-    def utcnow():
-        # TODO: Replace with datetime.datetime.utcnow() or equivalent in Phase 4
-        import datetime
-        return datetime.datetime.utcnow()
-
-    @staticmethod
-    def copy_attrs(src, dst):
-        # TODO: Replace with direct field assignment in Phase 4 (task 4.6)
-        raise NotImplementedError("util.copy_attrs not yet migrated")
-
-    @staticmethod
-    def range_string_to_list(port_range_string):
-        # TODO: Replace with real implementation in Phase 4 (task 4.6)
-        raise NotImplementedError("util.range_string_to_list not yet migrated")
-
-    @staticmethod
-    def pretty_bail(e, context):
-        # TODO: Replace with proper error handling in Phase 4 (task 4.6)
-        raise NotImplementedError("util.pretty_bail not yet migrated")
-
-util = _UtilStub()
+def _utcnow() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
-"""
-Imports scan-requests into the database.
-This importer should handle the import of only one nessus file."""
+def _range_string_to_list(port_range_string: str) -> list[int]:
+    """Convert a port range string (e.g. '1-1024,8080') to a list of ints.
+
+    Args:
+        port_range_string: A comma-separated list of port numbers or ranges
+            (e.g. '22,80,443,1000-2000').
+
+    Returns:
+        A sorted list of integer port numbers.
+    """
+    ports: list[int] = []
+    for part in port_range_string.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_str, end_str = part.split("-", 1)
+            start = int(start_str.strip())
+            end = int(end_str.strip())
+            ports.extend(range(start, end + 1))
+        else:
+            ports.append(int(part))
+    return sorted(ports)
 
 
 class NessusImporter(object):
     SOURCE = "nessus"
 
-    def __init__(self, db, manual_scan=False):
+    def __init__(self, manual_scan: bool = False):
         """Create an importer to handle one Nessus file.
 
         Args:
             manual_scan: When set to True, hosts will not be transitioned
-            to the next stage/status, and scan times are assumed to be now.
-
+                to the next stage/status, and scan times are assumed to be now.
         """
         self.__logger = logging.getLogger(__name__)
-        self.handler = NessusV2ContentHander(
-            self.host_callback,
-            self.report_callback,
-            self.targets_callback,
-            self.plugin_set_callback,
-            self.port_range_callback,
-            self.end_callback,
-        )
-        self.__db = db
-        self.__ch_db = CHDatabase(db)
-        self.current_host_owner = None
-        self.current_hostname = None
-        self.current_ip = None
-        self.current_ip_time = None
-        self.targets = None
-        self.ticket_manager = VulnTicketManager(
-            db, NessusImporter.SOURCE, manual_scan=manual_scan
-        )
-        self.attempted_to_clear_latest_flags = False
+        self.__ticket_manager = VulnTicketManager()
         self.manual_scan = manual_scan
 
-    def process(self, filename, gzipped=False):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
+        # State tracked during SAX parsing (current host context)
+        self._current_ip: netaddr.IPAddress | None = None
+        self._current_ip_time: datetime | None = None
 
-        self.__logger.debug("[%s] Starting processing of %s" % (thread_name, filename))
-        if self.manual_scan:
-            # if we are doing a manual scan import we have to assume a current time
-            self.current_ip_time = util.utcnow()
-        if gzipped:
-            f = gzip.open(filename, "r")
-        else:
-            f = open(filename, "r")
-        parse(f, self.handler)
-        f.close()
+        # Collected parsed data for async processing
+        # Each entry: dict with all parsedHost fields plus "_ip_str"
+        self._parsed_hosts: list[dict] = []
+        # Each entry: dict with all parsedReport fields plus "_ip_str" and "_end_time"
+        self._parsed_reports: list[dict] = []
 
-    def __try_to_clear_latest_flags(self):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
+        # Targets collected from the policy section
+        self._targets: netaddr.IPSet | None = None
 
-        # Once the ticket manager has all its information,
-        # it can clear the previous latest flags
-        if self.ticket_manager.ready_to_clear_vuln_latest_flags():
-            self.__logger.debug(
-                '[%s] Ticket manager IS READY to clear VulnScan "latest" flags'
-                % thread_name
-            )
-            self.ticket_manager.clear_vuln_latest_flags()
-            self.attempted_to_clear_latest_flags = True
-        else:
-            self.__logger.debug(
-                '[%s] Ticket manager IS NOT READY to clear VulnScan "latest" flags'
-                % thread_name
-            )
-
-    def targets_callback(self, targets_string):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
-
-        """list of targets read from the policy section
-        clear latest flags, and change host state
-        this is done here since not all targets necessarily
-        generate reports and host callbacks"""
+    def _targets_callback(self, targets_string: str) -> None:
+        """SAX callback: collect the list of scanned targets."""
         targets = targets_string.split(",")
-        self.targets = netaddr.IPSet()
+        self._targets = netaddr.IPSet()
         for t in targets:
-            # TODO: Create a helper function for this logic since it's
-            # duplicated in multiple places now.  See issue #18 for more
-            # details.
-            #
             # If any targets are a hostname and an IP address (e.g.
             # "foo.gov[192.168.1.1]"), extract the IP address.
-            #
-            # This could be done via regex, but I don't think there's any
-            # benefit that justifies the additional import.  Note that if
-            # something other than a valid is IP in the brackets, casting to an
-            # IPAddress will fail regardless of how we parse it.
             if "[" in t:
                 parts = t.strip().split("[")
                 if len(parts) == 2 and parts[1].endswith("]"):
                     t = parts[1][:-1]
                 else:
                     self.__logger.warning(
-                        "[%s] Skipping malformed target: '%s'"
-                        % (thread_name, t.strip())
+                        "Skipping malformed target: '%s'", t.strip()
                     )
                     continue
-            self.targets.add(netaddr.IPAddress(t))
+            self._targets.add(netaddr.IPAddress(t))
         self.__logger.debug(
-            "[%s] Found %d targets in Nessus file" % (thread_name, len(self.targets))
+            "Found %d targets in Nessus file", len(self._targets)
         )
-        self.ticket_manager.ips = self.targets
-        self.__try_to_clear_latest_flags()
 
-    def plugin_set_callback(self, plugin_set_string):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
-
+    def _plugin_set_callback(self, plugin_set_string: str) -> None:
+        """SAX callback: collect the set of plugin IDs used in this scan."""
         string_list = plugin_set_string.split(";")
-        if (
-            string_list[-1] == ""
-        ):  # this list ends with a ; creating a non-int empty string
+        if string_list[-1] == "":
+            # list ends with ; creating a non-int empty string
             string_list.pop()
         plugin_set = set(int(s) for s in string_list)
         self.__logger.debug(
-            "[%s] Found %d plugin_ids in Nessus file" % (thread_name, len(plugin_set))
+            "Found %d plugin_ids in Nessus file", len(plugin_set)
         )
-        self.ticket_manager.source_ids = plugin_set
-        self.__try_to_clear_latest_flags()
 
-    def port_range_callback(self, port_range_string):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
-
-        # The base policy port range was used
+    def _port_range_callback(self, port_range_string: str) -> None:
+        """SAX callback: collect the set of ports scanned."""
         if port_range_string == "default":
             # Match the base policy value found in /extras/policy.xml
             port_range_string = "1-65535"
-        ports = set(util.range_string_to_list(port_range_string))
+        ports = set(_range_string_to_list(port_range_string))
         self.__logger.debug(
-            "[%s] Found %d ports in Nessus file" % (thread_name, len(ports))
+            "Found %d ports in Nessus file", len(ports)
         )
-        self.ticket_manager.ports = ports
-        self.__try_to_clear_latest_flags()
 
-    def host_callback(self, parsedHost):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
-
-        # some fragile hosts don't list their host_ip
-        # fallback to name
+    def _host_callback(self, parsedHost: dict) -> None:
+        """SAX callback: collect parsed host metadata and set current IP context."""
+        # Some fragile hosts don't list their host_ip; fall back to name.
         if "host_ip" in parsedHost:
-            self.current_ip = netaddr.IPAddress(parsedHost["host_ip"])
+            ip = netaddr.IPAddress(parsedHost["host_ip"])
             del parsedHost["host_ip"]
         else:
             try:
-                self.current_ip = netaddr.IPAddress(parsedHost["name"])
+                ip = netaddr.IPAddress(parsedHost["name"])
             except netaddr.AddrFormatError:
-                # When parsedHost['name'] is not a valid IP (see CYHY-113 in Jira)
-                self.current_ip = None
+                # When parsedHost['name'] is not a valid IP (see CYHY-113)
                 self.__logger.warning(
-                    "[%s] Skipping vulnerability reports; invalid host IP detected: %s"
-                    % (thread_name, parsedHost["name"])
+                    "Skipping vulnerability reports; invalid host IP detected: %s",
+                    parsedHost["name"],
                 )
+                self._current_ip = None
                 return
-        parsedHost["ip"] = self.current_ip
 
-        # Try to determine the hostname and owner
-        self.current_hostname = None
-        self.current_host_owner = None
-        host_doc = self.__db.HostDoc.get_by_ip(self.current_ip)
-        if host_doc and host_doc.get("hostnames"):
-            # First, check if there is a HostDoc with a hostname that matches
-            # the parsedHost["name"].
-            for h in host_doc["hostnames"]:
-                if h["hostname"] == parsedHost["name"]:
-                    self.current_hostname = h["hostname"]
-                    self.current_host_owner = h.get("owner")
-                    break
-            # If we haven't set the hostname yet, check if there is a HostDoc
-            # hostname that matches parsedHost["host_fqdn"].
-            if not self.current_hostname:
-                for h in host_doc["hostnames"]:
-                    if h["hostname"] == parsedHost.get("host_fqdn"):
-                        self.current_hostname = h["hostname"]
-                        self.current_host_owner = h.get("owner")
-                        break
-
-        # If we still haven't set the hostname, check if parsedHost["host_fqdn"]
-        # matches the parsedHost["name"], and use that.  We can't trust
-        # parsedHost["name"] alone, since that can contain the IP address or
-        # some other user-supplied string.
-        if not self.current_hostname and (
-            parsedHost.get("host_fqdn") == parsedHost["name"]
-        ):
-            self.current_hostname = parsedHost["host_fqdn"]
-
-        # If we haven't set the host owner by now and we have a HostDoc, set the
-        # current_host_owner to the HostDoc owner.
-        if not self.current_host_owner and host_doc:
-            self.current_host_owner = host_doc.get("owner")
+        self._current_ip = ip
+        parsedHost["ip"] = ip
+        parsedHost["_ip_str"] = str(ip)
 
         if not self.manual_scan:
-            # only change the time if we are not doing a manual scan import
-            self.current_ip_time = parsedHost["end_time"]
-        if self.current_host_owner is None:
-            self.current_host_owner = UNKNOWN_OWNER
-            if self.current_hostname:
-                self.__logger.warning(
-                    "[%s] Could not find owner for %s - %s (%d)"
-                    % (
-                        thread_name,
-                        self.current_hostname,
-                        self.current_ip,
-                        int(self.current_ip),
-                    )
-                )
-            else:
-                self.__logger.warning(
-                    "[%s] Could not find owner for %s (%d)"
-                    % (thread_name, self.current_ip, int(self.current_ip))
-                )
+            # Use the host's end_time as the scan time
+            self._current_ip_time = parsedHost.get("end_time")
 
-        # Nessus host docs are not stored as we already have better data from nmap
+        self._parsed_hosts.append(parsedHost)
 
-    def report_callback(self, parsedReport):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
-
-        # not storing severity 0 reports or reports with invalid IPs
+    def _report_callback(self, parsedReport: dict) -> None:
+        """SAX callback: collect parsed vulnerability report, tagged with current IP."""
+        # Not storing severity 0 reports
         if parsedReport["severity"] == 0:
             return
-        if self.current_ip is None:
+        if self._current_ip is None:
             self.__logger.warning(
-                "[%s] No current IP; skipping vulnerability report: %s"
-                % (thread_name, parsedReport["plugin_name"])
+                "No current IP; skipping vulnerability report: %s",
+                parsedReport.get("plugin_name", "unknown"),
             )
             return
-        report = self.__db.VulnScanDoc()
-        util.copy_attrs(parsedReport, report)
+        # Tag the report with the current IP and scan time so we can
+        # associate it with the correct host during async processing.
+        parsedReport["_ip_str"] = str(self._current_ip)
+        parsedReport["_scan_time"] = self._current_ip_time
+        self._parsed_reports.append(parsedReport)
 
-        report.ip = self.current_ip  # sets ip and ip_int
-        report["hostname"] = self.current_hostname
-        report["latest"] = True
-        report["owner"] = self.current_host_owner
-        report["source"] = NessusImporter.SOURCE
-        report["time"] = self.current_ip_time
+    def _end_callback(self) -> None:
+        """SAX callback: end of parse (no-op; async processing done in process())."""
+        pass
 
-        try:
-            report.save()
-        except InvalidDocument as e:
-            util.pretty_bail(e, parsedReport)
+    async def process(self, filename: str, gzipped: bool = False) -> None:
+        """Import a Nessus file into the database.
 
-        self.ticket_manager.open_ticket(report, "vulnerability detected")
+        Parses the Nessus XML synchronously (SAX is blocking), then processes
+        all collected hosts and reports asynchronously.
 
-    def end_callback(self):
-        # Get the name of the current thread
-        thread_name = threading.current_thread().name
+        Args:
+            filename: Path to the Nessus XML file.
+            gzipped: If True, the file is gzip-compressed.
+        """
+        # Reset state for this parse run
+        self._targets = None
+        self._current_ip = None
+        self._current_ip_time = None
+        self._parsed_hosts = []
+        self._parsed_reports = []
 
-        for ip in self.targets:
-            if self.manual_scan:
-                # update host priority and reschedule host
-                self.__ch_db.update_host_priority_and_reschedule(ip)
-            else:
-                # move host out of RUNNING status
-                self.__ch_db.transition_host(ip)
-        self.ticket_manager.close_tickets()
-        if not self.attempted_to_clear_latest_flags:
-            self.__logger.warning(
-                '[%s] Reached end of Nessus import but did not clear "latest" flags'
-                % thread_name
-            )
-            self.__logger.warning(
-                "[%s] Ticket manager state counts: %d ips, %d ports, %d source_ids"
-                % (
-                    thread_name,
-                    len(self.ticket_manager.ips),
-                    len(self.ticket_manager.ports),
-                    len(self.ticket_manager.source_ids),
-                )
-            )
+        if self.manual_scan:
+            # For manual scan imports, assume current time for all hosts
+            self._current_ip_time = _utcnow()
+
+        self.__logger.debug("Starting processing of %s", filename)
+
+        # Create handler with synchronous collection callbacks
+        handler = NessusV2ContentHander(
+            self._host_callback,
+            self._report_callback,
+            self._targets_callback,
+            self._plugin_set_callback,
+            self._port_range_callback,
+            self._end_callback,
+        )
+
+        # Parse Nessus data synchronously (SAX is blocking)
+        if gzipped:
+            import gzip
+
+            with gzip.open(filename, "r") as f:
+                parse(f, handler)
         else:
-            self.__logger.debug(
-                "[%s] Reached end of Nessus import, VulnScan latest flags were cleared."
-                % thread_name
+            with open(filename, "r") as f:
+                parse(f, handler)
+
+        # Now process all collected data asynchronously
+        await self._process_hosts()
+
+    async def _process_hosts(self) -> None:
+        """Process all parsed hosts and their vulnerability reports asynchronously."""
+        if self._targets is None:
+            self.__logger.warning(
+                "No targets found in Nessus file; nothing to process."
             )
+            return
+
+        # Build a lookup from IP string → parsed host metadata
+        host_meta: dict[str, dict] = {}
+        for parsed_host in self._parsed_hosts:
+            ip_str = parsed_host.get("_ip_str")
+            if ip_str:
+                host_meta[ip_str] = parsed_host
+
+        # Group reports by IP address
+        reports_by_ip: dict[str, list[dict]] = {}
+        for report in self._parsed_reports:
+            ip_str = report.get("_ip_str")
+            if ip_str:
+                reports_by_ip.setdefault(ip_str, []).append(report)
+
+        # Process each target IP
+        for target_ip in self._targets:
+            ip_str = str(target_ip)
+            ip_addr = IPv4Address(ip_str)
+
+            # Look up the HostDoc to get owner
+            host_doc = await HostDoc.find_one(HostDoc.ip == ip_addr)
+            if host_doc:
+                owner = host_doc.owner
+            else:
+                owner = UNKNOWN_OWNER
+                self.__logger.warning(
+                    "No HostDoc found for IP %s; using owner=%s",
+                    ip_str,
+                    UNKNOWN_OWNER,
+                )
+
+            # Determine scan time for this host
+            parsed_host = host_meta.get(ip_str)
+            if self.manual_scan:
+                scan_time = self._current_ip_time or _utcnow()
+            elif parsed_host and "end_time" in parsed_host:
+                scan_time = parsed_host["end_time"]
+            else:
+                scan_time = _utcnow()
+
+            # Clear previous latest flags for this IP before storing new docs
+            await VulnScanDoc.reset_latest_flag_by_ip(ip_str)
+
+            # Store VulnScanDoc records for each detected vulnerability
+            vuln_docs: list[VulnScanDoc] = []
+            for report in reports_by_ip.get(ip_str, []):
+                vuln_doc = await self._store_vuln_report(
+                    report=report,
+                    ip_addr=ip_addr,
+                    owner=owner,
+                    scan_time=scan_time,
+                )
+                if vuln_doc is not None:
+                    vuln_docs.append(vuln_doc)
+
+            # Process vulnerability tickets for this host
+            await self.__ticket_manager.process_tickets(
+                ip=ip_str,
+                detected_vulns=vuln_docs,
+            )
+
+            # Transition host state or reschedule
+            if self.manual_scan:
+                # For manual scans, update priority and reschedule without
+                # transitioning stage/status
+                if host_doc is not None:
+                    from ..scheduler import DefaultScheduler
+
+                    _scheduler = DefaultScheduler()
+                    await _scheduler.schedule_host(host_doc)
+                    await host_doc.save()
+            else:
+                # Move host out of RUNNING status (vulnscan complete, host is up)
+                await db_ops.transition_host(
+                    ip=ip_str,
+                    up=True,
+                    reason="vuln-scan-complete",
+                )
+
+        self.__logger.debug(
+            "Completed Nessus import: %d targets, %d reports processed.",
+            len(self._targets),
+            len(self._parsed_reports),
+        )
+
+    async def _store_vuln_report(
+        self,
+        report: dict,
+        ip_addr: IPv4Address,
+        owner: str,
+        scan_time: datetime,
+    ) -> VulnScanDoc | None:
+        """Create and save a VulnScanDoc from a parsed Nessus report.
+
+        Args:
+            report: The parsed report dict from NessusV2ContentHander.
+            ip_addr: The IPv4Address of the scanned host.
+            owner: The owner string for this host.
+            scan_time: The datetime of the scan.
+
+        Returns:
+            The saved VulnScanDoc, or None if the report could not be stored.
+        """
+        # Resolve protocol enum
+        protocol_str = report.get("protocol", "tcp").lower()
+        try:
+            protocol = Protocol(protocol_str)
+        except ValueError:
+            protocol = Protocol.TCP
+
+        # Build VulnScanDoc with direct field assignment from parsedReport.
+        # Fields required by VulnScanDoc that may be absent in the XML get
+        # sensible defaults.
+        try:
+            vuln_doc = VulnScanDoc(
+                ip=ip_addr,
+                ip_int=int(ip_addr),
+                owner=owner,
+                source=NessusImporter.SOURCE,
+                time=scan_time,
+                latest=True,
+                # VulnScanDoc-specific fields from parsedReport
+                cvss_base_score=float(report.get("cvss_base_score", 0.0)),
+                cvss_vector=report.get("cvss_vector", ""),
+                description=report.get("description", ""),
+                fname=report.get("fname", ""),
+                plugin_family=report.get("plugin_family", ""),
+                plugin_id=int(report.get("plugin_id", 0)),
+                plugin_modification_date=report.get(
+                    "plugin_modification_date", scan_time
+                ),
+                plugin_name=report.get("plugin_name", ""),
+                plugin_publication_date=report.get(
+                    "plugin_publication_date", scan_time
+                ),
+                plugin_type=report.get("plugin_type", ""),
+                port=int(report.get("port", 0)),
+                protocol=protocol,
+                risk_factor=report.get("risk_factor", ""),
+                service=report.get("service", ""),
+                severity=int(report.get("severity", 0)),
+                solution=report.get("solution", ""),
+                synopsis=report.get("synopsis", ""),
+            )
+            await vuln_doc.save()
+            return vuln_doc
+        except Exception as e:
+            self.__logger.error(
+                "Failed to store VulnScanDoc for ip=%s plugin_id=%s: %s",
+                ip_addr,
+                report.get("plugin_id"),
+                e,
+            )
+            return None
