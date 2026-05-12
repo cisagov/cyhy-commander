@@ -263,6 +263,7 @@ class NessusImporter(object):
                     "No HostDoc found for IP %s; using owner=%s",
                     ip_str,
                     UNKNOWN_OWNER,
+                    extra={"host": ip_str, "stage": "VULNSCAN"},
                 )
 
             # Determine scan time for this host
@@ -317,6 +318,7 @@ class NessusImporter(object):
             "Completed Nessus import: %d targets, %d reports processed.",
             len(self._targets),
             len(self._parsed_reports),
+            extra={"stage": "VULNSCAN"},
         )
 
     async def _store_vuln_report(
@@ -386,5 +388,6 @@ class NessusImporter(object):
                 ip_addr,
                 report.get("plugin_id"),
                 e,
+                extra={"host": str(ip_addr), "stage": "VULNSCAN"},
             )
             return None

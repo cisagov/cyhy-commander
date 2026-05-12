@@ -210,17 +210,35 @@ class Commander(object):
                     "test -f {p} && cat {p} || true".format(p=shlex.quote(done_path)),
                 )
                 exit_code = (cp_done.stdout or "").strip()
+                # Derive the stage from the job name prefix (e.g. "NETSCAN1-…")
+                _job_stage = job.split("-")[0] if "-" in job else job
+
                 if not exit_code:
-                    self.__logger.warning("%s is not ready for pickup on %s", job, host)
+                    self.__logger.warning(
+                        "%s is not ready for pickup on %s",
+                        job,
+                        host,
+                        extra={"host": host, "job": job, "stage": _job_stage},
+                    )
                     continue
 
-                self.__logger.info("%s is ready for pickup on %s", job, host)
+                self.__logger.info(
+                    "%s is ready for pickup on %s",
+                    job,
+                    host,
+                    extra={"host": host, "job": job, "stage": _job_stage},
+                )
 
                 if exit_code == "0":
                     dest_dir = SUCCESS_DIR
                 else:
                     dest_dir = FAILED_DIR
-                    self.__logger.warning("%s had a non-zero exit code: %s", job, exit_code)
+                    self.__logger.warning(
+                        "%s had a non-zero exit code: %s",
+                        job,
+                        exit_code,
+                        extra={"host": host, "job": job, "stage": _job_stage},
+                    )
 
                 local_job_dir = str(Path(dest_dir) / job)
                 await asyncio.to_thread(
@@ -235,6 +253,7 @@ class Commander(object):
                     job,
                     host,
                     dest_dir,
+                    extra={"host": host, "job": job, "stage": _job_stage},
                 )
 
                 # remove remote dir
@@ -242,13 +261,19 @@ class Commander(object):
                     self.__ssh.run, host, "rm -rf {p}".format(p=shlex.quote(job_path))
                 )
                 if cp_rm.returncode == 0:
-                    self.__logger.info("%s was removed from %s", job, host)
+                    self.__logger.info(
+                        "%s was removed from %s",
+                        job,
+                        host,
+                        extra={"host": host, "job": job, "stage": _job_stage},
+                    )
                 else:
                     self.__logger.warning(
                         "Unable to remove %s from %s: %s",
                         job_path,
                         host,
                         (cp_rm.stderr or "").strip(),
+                        extra={"host": host, "job": job, "stage": _job_stage},
                     )
 
                 if dest_dir == SUCCESS_DIR:
@@ -286,6 +311,8 @@ class Commander(object):
         try:
             job_name = Path(job_path.rstrip("/")).name
             remote_job_dir = str(PurePosixPath(RUNNING_DIR) / job_name)
+            # Derive stage from job name prefix (e.g. "NETSCAN1-…")
+            _job_stage = job_name.split("-")[0] if "-" in job_name else job_name
 
             await asyncio.to_thread(
                 self.__ssh.rsync_push_dir,
@@ -294,7 +321,12 @@ class Commander(object):
                 remote_dir=remote_job_dir,
             )
 
-            self.__logger.info("%s was pushed successfully to %s", job_path, host)
+            self.__logger.info(
+                "%s was pushed successfully to %s",
+                job_path,
+                host,
+                extra={"host": host, "job": job_name, "stage": _job_stage},
+            )
 
             cp_touch = await asyncio.to_thread(
                 self.__ssh.run,
@@ -307,6 +339,7 @@ class Commander(object):
                     os.path.join(remote_job_dir, READY_FILE),
                     host,
                     (cp_touch.stderr or "").strip(),
+                    extra={"host": host, "job": job_name, "stage": _job_stage},
                 )
                 self.__host_exceptions[host] += 1
                 return
@@ -375,11 +408,22 @@ class Commander(object):
 
     async def __process_successful_job(self, job_path: str) -> None:
         """Process a single successful job using the registered success sinks."""
+        job_name = Path(job_path).name
+        _job_stage = job_name.split("-")[0] if "-" in job_name else job_name
         for sink in self.__success_sinks:
             if sink.can_handle(job_path):
-                self.__logger.info("Processing %s with %s", job_path, sink)
+                self.__logger.info(
+                    "Processing %s with %s",
+                    job_path,
+                    sink,
+                    extra={"job": job_name, "stage": _job_stage},
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed for %s", job_path)
+                self.__logger.info(
+                    "Processing completed for %s",
+                    job_path,
+                    extra={"job": job_name, "stage": _job_stage},
+                )
                 if not self.__test_mode and not self.__keep_successes:
                     shutil.rmtree(job_path)
                     self.__logger.info("%s deleted", job_path)
@@ -388,11 +432,22 @@ class Commander(object):
 
     async def __process_failed_job(self, job_path: str) -> None:
         """Process a single failed job using the registered failure sinks."""
+        job_name = Path(job_path).name
+        _job_stage = job_name.split("-")[0] if "-" in job_name else job_name
         for sink in self.__failure_sinks:
             if sink.can_handle(job_path):
-                self.__logger.warning("Processing %s with %s", job_path, sink)
+                self.__logger.warning(
+                    "Processing %s with %s",
+                    job_path,
+                    sink,
+                    extra={"job": job_name, "stage": _job_stage},
+                )
                 sink.handle(job_path)
-                self.__logger.info("Processing completed for %s", job_path)
+                self.__logger.info(
+                    "Processing completed for %s",
+                    job_path,
+                    extra={"job": job_name, "stage": _job_stage},
+                )
                 if not self.__test_mode and not self.__keep_failures:
                     shutil.rmtree(job_path)
                     self.__logger.info("%s deleted", job_path)

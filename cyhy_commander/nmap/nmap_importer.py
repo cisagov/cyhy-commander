@@ -182,7 +182,11 @@ class NmapImporter(object):
         if host_doc:
             ip_owner = host_doc.owner
         else:
-            self.__logger.warning("No HostDoc found for IP %s", str(ip))
+            self.__logger.warning(
+                "No HostDoc found for IP %s",
+                str(ip),
+                extra={"host": str(ip), "stage": self.__stage.value},
+            )
             ip_owner = UNKNOWN_OWNER
 
         open_port_docs: list[PortScanDoc] = []
@@ -226,6 +230,10 @@ class NmapImporter(object):
                             details["service"]["name"],
                             str(ip_addr),
                             int(port),
+                            extra={
+                                "host": str(ip_addr),
+                                "stage": self.__stage.value,
+                            },
                         )
 
         return open_port_docs

@@ -207,5 +207,6 @@ class DatabaseJobSource(JobSource):
             dir_name,
             len(hosts),
             self.__job_type,
+            extra={"job": dir_name, "stage": self.__job_type.value},
         )
         return job_path
