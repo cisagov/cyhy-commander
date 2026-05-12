@@ -420,27 +420,15 @@ class Commander(object):
                 return
         self.__logger.warning("No handler was able to process %s", job_path)
 
-    def handle_term(self, signum: int = 0, frame: object = None) -> None:
-        """Signal handler for graceful shutdown.
+    def handle_term(self) -> None:
+        """Graceful shutdown callback for loop.add_signal_handler().
 
-        Works both as a traditional signal handler (signal, frame) and as a
-        zero-argument callable for loop.add_signal_handler().
+        Called by the event loop's signal handler with no arguments.
+        Sets _is_running to False so the work cycle exits after the
+        current iteration completes.
         """
         self.__logger.warning(
-            "Received signal %d.  Shutting down after this work cycle completes.",
-            signum,
-        )
-        self.__is_running = False
-
-    def handle_term(self, signum: int = 0, frame: object = None) -> None:
-        """Signal handler for graceful shutdown.
-
-        Works both as a traditional signal handler (signal, frame) and as a
-        zero-argument callable for loop.add_signal_handler().
-        """
-        self.__logger.warning(
-            "Received signal %d.  Shutting down after this work cycle completes.",
-            signum,
+            "Received SIGTERM. Shutting down after this work cycle completes."
         )
         self.__is_running = False
 
