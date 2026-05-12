@@ -219,9 +219,11 @@ class Commander(object):
             )
         self.__failure_sinks = [TryAgainSink()]
 
-    def __done_jobs(self, host: str) -> None:
+    async def __done_jobs(self, host: str) -> None:
         try:
-            cp = self.__ssh.run(host, "ls {d}".format(d=shlex.quote(DONE_DIR)))
+            cp = await asyncio.to_thread(
+                self.__ssh.run, host, "ls {d}".format(d=shlex.quote(DONE_DIR))
+            )
             if cp.returncode != 0:
                 self.__logger.warning(
                     'Unable to get listing of "%s" on %s: %s',
@@ -237,7 +239,8 @@ class Commander(object):
                 done_path = str(PurePosixPath(job_path) / DONE_FILE)
 
                 # Only proceed when .done exists and has an exit code.
-                cp_done = self.__ssh.run(
+                cp_done = await asyncio.to_thread(
+                    self.__ssh.run,
                     host,
                     "test -f {p} && cat {p} || true".format(p=shlex.quote(done_path)),
                 )
@@ -255,7 +258,8 @@ class Commander(object):
                     self.__logger.warning("%s had a non-zero exit code: %s", job, exit_code)
 
                 local_job_dir = str(Path(dest_dir) / job)
-                self.__ssh.rsync_pull_dir(
+                await asyncio.to_thread(
+                    self.__ssh.rsync_pull_dir,
                     host=host,
                     remote_dir=job_path,
                     local_dir=local_job_dir,
@@ -269,7 +273,9 @@ class Commander(object):
                 )
 
                 # remove remote dir
-                cp_rm = self.__ssh.run(host, "rm -rf {p}".format(p=shlex.quote(job_path)))
+                cp_rm = await asyncio.to_thread(
+                    self.__ssh.run, host, "rm -rf {p}".format(p=shlex.quote(job_path))
+                )
                 if cp_rm.returncode == 0:
                     self.__logger.info("%s was removed from %s", job, host)
                 else:
@@ -290,9 +296,11 @@ class Commander(object):
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
 
-    def __running_job_count(self, host: str):
+    async def __running_job_count(self, host: str):
         try:
-            cp = self.__ssh.run(host, "ls {d}".format(d=shlex.quote(RUNNING_DIR)))
+            cp = await asyncio.to_thread(
+                self.__ssh.run, host, "ls {d}".format(d=shlex.quote(RUNNING_DIR))
+            )
             if cp.returncode != 0:
                 self.__logger.warning(
                     'Unable to get listing of "%s" on %s: %s',
@@ -309,12 +317,13 @@ class Commander(object):
             self.__host_exceptions[host] += 1
             return None
 
-    def __push_job(self, host: str, job_path: str) -> None:
+    async def __push_job(self, host: str, job_path: str) -> None:
         try:
             job_name = Path(job_path.rstrip("/")).name
             remote_job_dir = str(PurePosixPath(RUNNING_DIR) / job_name)
 
-            self.__ssh.rsync_push_dir(
+            await asyncio.to_thread(
+                self.__ssh.rsync_push_dir,
                 host=host,
                 local_dir=job_path,
                 remote_dir=remote_job_dir,
@@ -322,7 +331,8 @@ class Commander(object):
 
             self.__logger.info("%s was pushed successfully to %s", job_path, host)
 
-            cp_touch = self.__ssh.run(
+            cp_touch = await asyncio.to_thread(
+                self.__ssh.run,
                 host,
                 "touch {p}".format(p=shlex.quote(str(PurePosixPath(remote_job_dir) / READY_FILE))),
             )
@@ -395,7 +405,7 @@ class Commander(object):
             self.__logger.debug("No available jobs returned by %s" % source)
         return job
 
-    def __fill_hosts(self, counts, sources, workgroup_name, jobs_per_host):
+    async def __fill_hosts(self, counts, sources, workgroup_name, jobs_per_host):
         while True:
             lowest_host = self.__lowest_host(counts)
             if counts[lowest_host] >= jobs_per_host:
@@ -407,7 +417,7 @@ class Commander(object):
                     "Not enough work available to fill %s hosts" % workgroup_name
                 )
                 break  # no more work to do
-            self.__push_job(lowest_host, job_path)
+            await self.__push_job(lowest_host, job_path)
             counts[lowest_host] += 1
 
     def __monitor_job_queues(self):
@@ -657,15 +667,15 @@ class Commander(object):
         """Perform one work cycle for a single nmap scanner host.
 
         Retrieves done jobs, then fills the host with new jobs up to the
-        configured limit.  SSH/rsync calls are still synchronous here;
-        task 5.2 wraps them with asyncio.to_thread().
+        configured limit.  SSH/rsync calls are wrapped with asyncio.to_thread()
+        to avoid blocking the event loop.
         """
-        self.__done_jobs(host)
-        count = self.__running_job_count(host)
+        await self.__done_jobs(host)
+        count = await self.__running_job_count(host)
         if count is None:
             return
         counts = {host: count}
-        self.__fill_hosts(
+        await self.__fill_hosts(
             counts,
             self.__nmap_sources,
             NMAP_WORKGROUP,
@@ -674,12 +684,12 @@ class Commander(object):
 
     async def __work_nessus_host(self, host: str) -> None:
         """Perform one work cycle for a single nessus scanner host."""
-        self.__done_jobs(host)
-        count = self.__running_job_count(host)
+        await self.__done_jobs(host)
+        count = await self.__running_job_count(host)
         if count is None:
             return
         counts = {host: count}
-        self.__fill_hosts(
+        await self.__fill_hosts(
             counts,
             self.__nessus_sources,
             NESSUS_WORKGROUP,
