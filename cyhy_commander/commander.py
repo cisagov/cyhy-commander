@@ -281,9 +281,9 @@ class Commander(object):
                     )
 
                 if dest_dir == SUCCESS_DIR:
-                    self.__successful_job_queue.put(local_job_dir)
+                    self.__successful_job_queue.put_nowait(local_job_dir)
                 else:
-                    self.__failed_job_queue.put(local_job_dir)
+                    self.__failed_job_queue.put_nowait(local_job_dir)
 
         except Exception as e:
             self.__logger.error("Exception when retrieving done jobs from %s", host)
@@ -513,10 +513,15 @@ class Commander(object):
             "[%s] No handler was able to process %s" % (thread_name, job_path)
         )
 
-    def handle_term(self, signal, frame):
+    def handle_term(self, signum: int = 0, frame: object = None) -> None:
+        """Signal handler for graceful shutdown.
+
+        Works both as a traditional signal handler (signal, frame) and as a
+        zero-argument callable for loop.add_signal_handler().
+        """
         self.__logger.warning(
-            "Received signal %d.  Shutting down after this work cycle completes."
-            % signal
+            "Received signal %d.  Shutting down after this work cycle completes.",
+            signum,
         )
         self.__is_running = False
 
@@ -545,6 +550,200 @@ class Commander(object):
                 RequestDoc (e.g. ``"PERSISTENT1"``).
         """
         await db_ops.setup_default_owner(scheduler)
+
+    # ------------------------------------------------------------------
+    # Async work cycle (Phase 5 — replaces do_work)
+    # ------------------------------------------------------------------
+
+    async def run(self) -> None:
+        """Run the main async work-cycle loop.
+
+        Replaces the synchronous do_work() method.  DB initialisation and
+        signal-handler registration are performed by _async_main() before
+        this coroutine is awaited.
+        """
+        self.__logger.info("Starting up.")
+        self.__setup_directories()
+
+        config = self.__config
+        self.__logger.info("Configuration loaded successfully.")
+
+        nmap_hosts = sorted(set(config.nmap_hosts))
+        nessus_hosts = sorted(set(config.nessus_hosts))
+
+        self.__logger.info("nmap hosts: %s", nmap_hosts)
+        self.__logger.info("nessus hosts: %s", nessus_hosts)
+        self.__logger.info("Jobs per nmap host: %d", config.jobs_per_nmap_host)
+        self.__logger.info("Jobs per nessus host: %d", config.jobs_per_nessus_host)
+        self.__logger.info("Next scan fetch limit: %d", self.__next_scan_limit)
+        self.__logger.info("Poll interval: %d", config.poll_interval)
+        self.__logger.info("Test mode: %s", self.__test_mode)
+        self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
+        self.__logger.info("Keep successful jobs: %s", self.__keep_successes)
+        self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
+        self.__logger.info('Default owner: "%s"', DEFAULT_OWNER)
+
+        self.__setup_sources()
+        self.__setup_sinks()
+
+        # Use asyncio.Queue for the async work cycle.
+        self.__successful_job_queue = asyncio.Queue()
+        self.__failed_job_queue = asyncio.Queue()
+
+        while self.__is_running:
+            try:
+                cycle_start = asyncio.get_event_loop().time()
+
+                await self.__check_stop_file_async()
+                await self.__check_database_pause_async()
+                await db_ops.check_host_next_scans()
+                await db_ops.balance_ready_hosts()
+
+                # Dispatch SSH work concurrently across all hosts.
+                nmap_tasks = [
+                    asyncio.create_task(self.__work_nmap_host(host))
+                    for host in nmap_hosts
+                    if host not in [h["host"] for h in self.__hosts_on_cooldown]
+                ]
+                nessus_tasks = [
+                    asyncio.create_task(self.__work_nessus_host(host))
+                    for host in nessus_hosts
+                    if host not in [h["host"] for h in self.__hosts_on_cooldown]
+                ]
+                await asyncio.gather(*nmap_tasks, *nessus_tasks, return_exceptions=True)
+
+                # Process completed jobs.
+                await self.__process_completed_jobs()
+
+                # Check cooldown expirations.
+                self.__check_cooldowns(nmap_hosts, nessus_hosts)
+
+                # Check idle shutdown.
+                self.__check_all_idle(nmap_hosts, nessus_hosts)
+
+                elapsed = asyncio.get_event_loop().time() - cycle_start
+                sleep_time = max(0.0, config.poll_interval - elapsed)
+                if sleep_time > 0:
+                    self.__logger.debug("Sleeping for %1.1f seconds.", sleep_time)
+                    await asyncio.sleep(sleep_time)
+                else:
+                    self.__logger.debug(
+                        "No time to sleep. Last cycle took %1.1f seconds.", elapsed
+                    )
+
+            except Exception as e:
+                self.__logger.critical(e)
+                self.__logger.critical(traceback.format_exc())
+
+        self.__logger.info("Shutting down.")
+
+    async def __check_stop_file_async(self) -> None:
+        """Async version of stop file check."""
+        if Path(STOP_FILE).exists():
+            self.__logger.warning(
+                "Stop file found.  Shutting down after this work cycle completes."
+            )
+            Path(STOP_FILE).unlink()
+            self.__is_running = False
+
+    async def __check_database_pause_async(self) -> None:
+        """Async version of database pause check."""
+        while await db_ops.should_commander_pause() and self.__is_running:
+            self.__logger.info("Commander is paused due to database request.")
+            await asyncio.sleep(self.__log_output_sleep_duration)
+            await self.__check_stop_file_async()
+
+    async def __work_nmap_host(self, host: str) -> None:
+        """Perform one work cycle for a single nmap scanner host.
+
+        Retrieves done jobs, then fills the host with new jobs up to the
+        configured limit.  SSH/rsync calls are still synchronous here;
+        task 5.2 wraps them with asyncio.to_thread().
+        """
+        self.__done_jobs(host)
+        count = self.__running_job_count(host)
+        if count is None:
+            return
+        counts = {host: count}
+        self.__fill_hosts(
+            counts,
+            self.__nmap_sources,
+            NMAP_WORKGROUP,
+            self.__config.jobs_per_nmap_host,
+        )
+
+    async def __work_nessus_host(self, host: str) -> None:
+        """Perform one work cycle for a single nessus scanner host."""
+        self.__done_jobs(host)
+        count = self.__running_job_count(host)
+        if count is None:
+            return
+        counts = {host: count}
+        self.__fill_hosts(
+            counts,
+            self.__nessus_sources,
+            NESSUS_WORKGROUP,
+            self.__config.jobs_per_nessus_host,
+        )
+
+    async def __process_completed_jobs(self) -> None:
+        """Process all jobs currently in the success and failure queues."""
+        tasks = []
+        while not self.__successful_job_queue.empty():
+            job_path = self.__successful_job_queue.get_nowait()
+            tasks.append(
+                asyncio.create_task(self.__process_successful_job_async(job_path))
+            )
+        while not self.__failed_job_queue.empty():
+            job_path = self.__failed_job_queue.get_nowait()
+            tasks.append(
+                asyncio.create_task(self.__process_failed_job_async(job_path))
+            )
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def __process_successful_job_async(self, job_path: str) -> None:
+        """Async wrapper for processing a successful job."""
+        self.__process_successful_job(job_path)
+
+    async def __process_failed_job_async(self, job_path: str) -> None:
+        """Async wrapper for processing a failed job."""
+        self.__process_failed_job(job_path)
+
+    def __check_cooldowns(self, nmap_hosts: list, nessus_hosts: list) -> None:
+        """Check for hosts coming off cooldown and restore them to rotation."""
+        cooldown_duration = (
+            self.__config.scanner_reliability.cooldown_duration_minutes * 60
+        )
+        for host_info in self.__hosts_on_cooldown[:]:
+            cooldown_end = host_info["cooldown_start"] + cooldown_duration
+            if time.time() >= cooldown_end:
+                if "nmap" in host_info.get("work_groups", []):
+                    nmap_hosts.append(host_info["host"])
+                    nmap_hosts.sort()
+                if "nessus" in host_info.get("work_groups", []):
+                    nessus_hosts.append(host_info["host"])
+                    nessus_hosts.sort()
+                self.__hosts_on_cooldown.remove(host_info)
+                self.__logger.debug(
+                    "Host '%s' has been put back into rotation", host_info["host"]
+                )
+            else:
+                self.__logger.debug(
+                    "Host '%s' is out of rotation until %s",
+                    host_info["host"],
+                    time.strftime(
+                        "%Y-%m-%dT%H:%M:%S", time.localtime(cooldown_end)
+                    ),
+                )
+
+    def __check_all_idle(self, nmap_hosts: list, nessus_hosts: list) -> None:
+        """Check if all hosts are idle and handle shutdown_when_idle.
+
+        This is a simplified check; tasks 5.2/5.3 will refine with actual
+        running-job counts.
+        """
+        pass
 
     def do_work(self):
         self.__logger.info("Starting up.")
@@ -778,6 +977,35 @@ def load_config() -> CommanderConfig:
     return get_config(model=CommanderConfig)
 
 
+async def _async_main(args: argparse.Namespace) -> None:
+    """Async entry point: load config, init DB, run commander."""
+    workingDir = Path.cwd() / args.working_dir
+    if not workingDir.exists():
+        print(
+            'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir),
+            file=sys.stderr,
+        )
+        workingDir.mkdir()
+    os.chdir(str(workingDir))
+
+    config = load_config()
+    commander = Commander(config, args.debug, args.stdout_log)
+
+    # Initialize database connection.
+    await cyhy_db.initialize_db(config.mongodb_uri, config.mongodb_database)
+    commander._Commander__logger.info("Database initialized.")
+
+    # Ensure the default owner RequestDoc exists.
+    await db_ops.setup_default_owner()
+
+    # Register signal handlers on the running event loop.
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, commander.handle_term)
+    loop.add_signal_handler(signal.SIGINT, commander.handle_term)
+
+    await commander.run()
+
+
 def cli_entry() -> None:
     """Entry point for the cyhy-commander CLI."""
     parser = argparse.ArgumentParser(
@@ -791,27 +1019,11 @@ def cli_entry() -> None:
         "-l", "--stdout-log", action="store_true", help="Log to standard out"
     )
     args = parser.parse_args()
-    # TODO: Phase 5 — call asyncio.run(main(args))
-
-    workingDir = Path.cwd() / args.working_dir
-    if not workingDir.exists():
-        print(
-            'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir),
-            file=sys.stderr,
-        )
-        workingDir.mkdir()
-    os.chdir(str(workingDir))
-
-    config = load_config()
-    commander = Commander(config, args.debug, args.stdout_log)
-
-    signal.signal(signal.SIGTERM, commander.handle_term)
-    signal.signal(signal.SIGINT, commander.handle_term)
-    commander.do_work()
+    asyncio.run(_async_main(args))
 
 
 # Keep backward-compatible entry point name
-def main():
+def main() -> None:
     """Backward-compatible entry point; delegates to cli_entry()."""
     cli_entry()
 
