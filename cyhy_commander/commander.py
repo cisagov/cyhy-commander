@@ -207,17 +207,17 @@ class Commander(object):
 
     def __setup_sinks(self):
         if self.__test_mode:
-            noop_sink = NoOpSink(self.__db)
+            noop_sink = NoOpSink()
             self.__success_sinks.append(noop_sink)
         else:
-            netscan1_sink = NmapSink(self.__db, Stage.NETSCAN1)
-            netscan2_sink = NmapSink(self.__db, Stage.NETSCAN2)
-            portscan_sink = NmapSink(self.__db, Stage.PORTSCAN)
-            vulnscan_sink = NessusSink(self.__db)
+            netscan1_sink = NmapSink(Stage.NETSCAN1)
+            netscan2_sink = NmapSink(Stage.NETSCAN2)
+            portscan_sink = NmapSink(Stage.PORTSCAN)
+            vulnscan_sink = NessusSink()
             self.__success_sinks.extend(
                 (netscan1_sink, netscan2_sink, portscan_sink, vulnscan_sink)
             )
-        self.__failure_sinks = [TryAgainSink(self.__db)]
+        self.__failure_sinks = [TryAgainSink()]
 
     def __done_jobs(self, host: str) -> None:
         try:
