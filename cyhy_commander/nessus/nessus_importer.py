@@ -27,6 +27,7 @@ from ..ticket_manager import VulnTicketManager
 
 # Local nessus handler
 from .nessus_handler import NessusV2ContentHander
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 UNKNOWN_OWNER = "UNKNOWN"
 
@@ -71,7 +72,7 @@ class NessusImporter(object):
             manual_scan: When set to True, hosts will not be transitioned
                 to the next stage/status, and scan times are assumed to be now.
         """
-        self.__logger = logging.getLogger(__name__)
+        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.nessus_importer")
         self.__ticket_manager = VulnTicketManager()
         self.manual_scan = manual_scan
 

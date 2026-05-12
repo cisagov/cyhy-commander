@@ -17,8 +17,9 @@ from cyhy_db.models import HostDoc, PortScanDoc
 from cyhy_db.models.enum import Stage, Status
 
 from . import db_ops
+from cyhy_logging import CYHY_ROOT_LOGGER
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.job_source")
 
 JOB_FILENAME = "job"
 PORTS_FILE_NAME = "ports"

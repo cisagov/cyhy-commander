@@ -25,8 +25,9 @@ from cyhy_db.models import (
     VulnScanDoc,
 )
 from cyhy_db.models.enum import TicketAction
+from cyhy_logging import CYHY_ROOT_LOGGER
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.ticket_manager")
 
 # Default window (in days) within which a closed ticket can be reopened
 # rather than creating a new one.

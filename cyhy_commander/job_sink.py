@@ -20,11 +20,12 @@ from cyhy_db.models.enum import Stage
 from cyhy_commander import db_ops
 from cyhy_commander.nessus import NessusImporter
 from cyhy_commander.nmap import NmapImporter
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 OUTPUT_FILENAME = "job.out"
 TARGETS_GLOB = "*SCAN*.txt"
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.job_sink")
 
 
 class NmapSink:
@@ -175,7 +176,7 @@ class TryAgainSink:
 
     def __init__(self) -> None:
         """Initialise the TryAgainSink."""
-        self.__logger = logging.getLogger(__name__)
+        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.job_sink")
 
     def __str__(self) -> str:
         return "<TryAgainSink>"

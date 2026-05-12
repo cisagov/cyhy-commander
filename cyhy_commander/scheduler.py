@@ -15,8 +15,9 @@ from datetime import datetime, timedelta, timezone
 # Third-party libraries
 import numpy as np
 from cyhy_db.models import HostDoc, VulnScanDoc
+from cyhy_logging import CYHY_ROOT_LOGGER
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.scheduler")
 
 # Anchor points for priority-to-interval interpolation (design section 5.2).
 # Each tuple is (priority, interval_in_hours).

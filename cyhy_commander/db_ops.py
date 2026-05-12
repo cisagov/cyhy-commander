@@ -26,8 +26,9 @@ from cyhy_db.models.enum import (
 
 from .host_state_manager import DefaultHostStateManager
 from .scheduler import DefaultScheduler
+from cyhy_logging import CYHY_ROOT_LOGGER
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.db_ops")
 
 # The default owner for "ownerless" hosts (hosts whose IP is not claimed by
 # any enrolled CyHy entity).

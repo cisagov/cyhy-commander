@@ -22,12 +22,10 @@ import traceback
 import cyhy_db
 from cyhy_config import get_config
 from cyhy_db.models.enum import ScanType, Stage
+from cyhy_logging import CYHY_ROOT_LOGGER, setup_logging
 
 from .config_model import CommanderConfig
 from . import db_ops
-
-# TODO: Phase 6 — replace with cyhy-logging setup_logging
-# from cyhy.util import setup_logging  (removed)
 
 # Default owner constant — "ownerless" hosts belong to this org.
 # Sourced from db_ops to keep a single definition.
@@ -48,8 +46,6 @@ DEFAULT_LOGGER_LEVEL = logging.INFO
 DROP_DIR = "drop"
 FAILED_DIR = "failed"
 LOCK_FILENAME = "cyhy-commander"
-LOG_FILE = "/var/log/cyhy/commander.log"
-LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(name)s - %(message)s"
 PUSHED_DIR = "pushed"
 STOP_FILE = "stop"
 SUCCESS_DIR = "done"
@@ -70,10 +66,9 @@ NMAP_WORKGROUP = "nmap"
 
 
 class Commander(object):
-    def __init__(self, config: CommanderConfig, debug_logging=False, console_logging=False):
+    def __init__(self, config: CommanderConfig):
         # Set up logging first in order to log any errors as soon as possible.
-        self.__logger = logging.getLogger(__name__)
-        self.__setup_logging(debug_logging, console_logging)
+        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander")
 
         self.__all_hosts_idle = False
         self.__config = config
@@ -97,22 +92,6 @@ class Commander(object):
 
         # New SSH transport (Fabric replacement)
         self.__ssh = ssh_transport.SSHTransport(self.__logger)
-
-    def __setup_logging(self, debug_logging, console_logging):
-        # get default logging setup
-        if debug_logging:
-            level = logging.DEBUG
-        else:
-            level = DEFAULT_LOGGER_LEVEL
-
-        if console_logging:
-            # TODO: Phase 6 — replace with cyhy-logging setup_logging(level, console=True)
-            logging.basicConfig(level=level, format=LOGGER_FORMAT, stream=sys.stdout)
-        else:
-            # TODO: Phase 6 — replace with cyhy-logging setup_logging(level, filename=LOG_FILE)
-            logging.basicConfig(level=level, format=LOGGER_FORMAT)
-
-        self.__logger.debug("Debug logging enabled")
 
     def __setup_directories(self):
         for directory in (SUCCESS_DIR, PUSHED_DIR, FAILED_DIR):
@@ -650,7 +629,8 @@ async def _async_main(args: argparse.Namespace) -> None:
     os.chdir(str(workingDir))
 
     config = load_config()
-    commander = Commander(config, args.debug, args.stdout_log)
+    setup_logging(log_level=config.log_level)
+    commander = Commander(config)
 
     # Initialize database connection.
     await cyhy_db.initialize_db(config.mongodb_uri, config.mongodb_database)

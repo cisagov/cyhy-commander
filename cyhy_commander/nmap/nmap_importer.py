@@ -26,6 +26,7 @@ from ..ticket_manager import IPPortTicketManager, IPTicketManager
 
 # Local nmap handler
 from .nmap_handler import NmapContentHandler
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 UNKNOWN_OWNER = "UNKNOWN"
 DEFAULT_OWNER = "FEDERAL"
@@ -64,7 +65,7 @@ class NmapImporter(object):
     SOURCE = "nmap"
 
     def __init__(self, stage=Stage.PORTSCAN):
-        self.__logger = logging.getLogger(__name__)
+        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.nmap_importer")
         if stage in (Stage.NETSCAN1, Stage.NETSCAN2):
             self.__ticket_manager = IPTicketManager()
         elif stage == Stage.PORTSCAN:

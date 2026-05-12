@@ -14,8 +14,9 @@ from dataclasses import dataclass
 
 # Third-party libraries
 from cyhy_db.models.enum import Stage, Status
+from cyhy_logging import CYHY_ROOT_LOGGER
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.host_state_manager")
 
 
 @dataclass(frozen=True)
