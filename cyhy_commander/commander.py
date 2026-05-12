@@ -20,8 +20,9 @@ import threading
 import time
 import traceback
 
-# TODO: Phase 3 — replace with cyhy-config/CommanderConfig
-# from ConfigParser import SafeConfigParser  (removed — Python 2 only)
+from cyhy_config import get_config
+
+from .config_model import CommanderConfig
 
 # TODO: Phase 4 — replace with cyhy_db.initialize_db
 # from cyhy.db import CHDatabase, database  (removed)
@@ -75,7 +76,6 @@ READY_FILE = ".ready"
 RUNNING_DIR = "runner/running"
 
 # local files
-CONFIG_FILENAME = "/etc/cyhy/commander.conf"
 DEFAULT_LOGGER_LEVEL = logging.INFO
 DROP_DIR = "drop"
 FAILED_DIR = "failed"
@@ -95,60 +95,20 @@ PORTSCAN_JOB_FILE = _jobs_dir / "portscan.sh"
 SLEEP_JOB_FILE = _jobs_dir / "rand-sleep.py"
 VULNSCAN_JOB_FILE = _jobs_dir / "vulnscan.py"
 
-# config file
-DATABASE_NAME = "database-name"
-DATABASE_URI = "database-uri"
-DEFAULT = "DEFAULT"
-DEFAULT_SCHEDULER = "default-scheduler"
-DEFAULT_SECTION = "default-section"
-JOB_PROCESSING_THREADS = "job-processing-threads"
-JOBS_PER_NESSUS_HOST = "jobs-per-nessus-host"
-JOBS_PER_NMAP_HOST = "jobs-per-nmap-host"
-KEEP_FAILURES = "keep-failures"
-KEEP_SUCCESSES = "keep-successes"
-NESSUS_HOSTS = "nessus-hosts"
-NEXT_SCAN_LIMIT = "next-scan-limit"
-NMAP_HOSTS = "nmap-hosts"
-POLL_INTERVAL = "poll-interval"
-PRODUCTION_SECTION = "production"
-SHUTDOWN_WHEN_IDLE = "shutdown-when-idle"
-TEST_MODE = "test-mode"
-TESTING_PURGE_SECTION = "testing-purge"
-TESTING_SECTION = "testing"
-
-# TODO eventual config options
-IPS_PER_NETSCAN1_JOB = 128
-IPS_PER_NETSCAN2_JOB = 128 // 2
-IPS_PER_PORTSCAN_JOB = 32 // 4
-IPS_PER_VULNSCAN_JOB = 4
 RANDOMIZE_SOURCES = True
 
 NESSUS_WORKGROUP = "nessus"
 NMAP_WORKGROUP = "nmap"
 
-# The number of exceptions to allow before putting a host on "cooldown".
-#
-# A host on cooldown is removed from any work group lists it is on for the
-# duration of its cooldown period. This means that the existing connection is
-# closed, and no attempts are made to interact with the host until the below
-# cooldown duration has expired. Once it has, the host is restored to the
-# list(s) it was removed from and normal operations for that host continue.
-NUM_EXCEPTIONS_ALLOWED = 2
-# How long should a host remain on cooldown
-#
-# This value is in seconds, but it is set up to use minutes for granularity. The
-# second value should be changed to modify the cooldown duration.
-COOLDOWN_DURATION = 60 * 30
-
 
 class Commander(object):
-    def __init__(self, config_section=None, debug_logging=False, console_logging=False):
+    def __init__(self, config: CommanderConfig, debug_logging=False, console_logging=False):
         # Set up logging first in order to log any errors as soon as possible.
         self.__logger = logging.getLogger(__name__)
         self.__setup_logging(debug_logging, console_logging)
 
         self.__all_hosts_idle = False
-        self.__config_section = config_section
+        self.__config = config
         self.__db = None
         self.__failed_job_queue = None
         self.__failure_sinks = []
@@ -157,18 +117,18 @@ class Commander(object):
         self.__is_processing_jobs = True
         self.__is_running = True
         self.__job_processing_sleep_duration = 1
-        self.__keep_failures = False
-        self.__keep_successes = False
+        self.__keep_failures = config.keep_failures
+        self.__keep_successes = config.keep_successes
         self.__log_output_sleep_duration = 10
         self.__nessus_sources = []
-        self.__next_scan_limit = 2000
+        self.__next_scan_limit = config.next_scan_limit
         self.__nmap_sources = []
         self.__queue_monitor_output_lock = threading.Lock()
         self.__setup_directories()
-        self.__shutdown_when_idle = False
+        self.__shutdown_when_idle = config.shutdown_when_idle
         self.__success_sinks = []
         self.__successful_job_queue = None
-        self.__test_mode = False
+        self.__test_mode = config.test_mode
 
         # New SSH transport (Fabric replacement)
         self.__ssh = ssh_transport.SSHTransport(self.__logger)
@@ -209,7 +169,7 @@ class Commander(object):
                     SLEEP_JOB_FILE,
                     self.__db,
                     job_type=STAGE.NETSCAN1,
-                    count=IPS_PER_NETSCAN1_JOB,
+                    count=self.__config.job_sizing.netscan1,
                 )
             )
             self.__nmap_sources.append(
@@ -217,7 +177,7 @@ class Commander(object):
                     SLEEP_JOB_FILE,
                     self.__db,
                     job_type=STAGE.NETSCAN2,
-                    count=IPS_PER_NETSCAN2_JOB,
+                    count=self.__config.job_sizing.netscan2,
                 )
             )
             self.__nmap_sources.append(
@@ -225,7 +185,7 @@ class Commander(object):
                     SLEEP_JOB_FILE,
                     self.__db,
                     job_type=STAGE.PORTSCAN,
-                    count=IPS_PER_PORTSCAN_JOB,
+                    count=self.__config.job_sizing.portscan,
                 )
             )
             self.__nessus_sources.append(
@@ -233,7 +193,7 @@ class Commander(object):
                     SLEEP_JOB_FILE,
                     self.__db,
                     job_type=STAGE.VULNSCAN,
-                    count=IPS_PER_VULNSCAN_JOB,
+                    count=self.__config.job_sizing.vulnscan,
                 )
             )
         else:
@@ -243,7 +203,7 @@ class Commander(object):
                     NETSCAN1_JOB_FILE,
                     self.__db,
                     job_type=STAGE.NETSCAN1,
-                    count=IPS_PER_NETSCAN1_JOB,
+                    count=self.__config.job_sizing.netscan1,
                 )
             )
             self.__nmap_sources.append(
@@ -251,7 +211,7 @@ class Commander(object):
                     NETSCAN2_JOB_FILE,
                     self.__db,
                     job_type=STAGE.NETSCAN2,
-                    count=IPS_PER_NETSCAN2_JOB,
+                    count=self.__config.job_sizing.netscan2,
                 )
             )
             self.__nmap_sources.append(
@@ -259,7 +219,7 @@ class Commander(object):
                     PORTSCAN_JOB_FILE,
                     self.__db,
                     job_type=STAGE.PORTSCAN,
-                    count=IPS_PER_PORTSCAN_JOB,
+                    count=self.__config.job_sizing.portscan,
                 )
             )
             self.__nessus_sources.append(
@@ -267,7 +227,7 @@ class Commander(object):
                     VULNSCAN_JOB_FILE,
                     self.__db,
                     job_type=STAGE.VULNSCAN,
-                    count=IPS_PER_VULNSCAN_JOB,
+                    count=self.__config.job_sizing.vulnscan,
                 )
             )
 
@@ -600,16 +560,6 @@ class Commander(object):
             time.sleep(self.__log_output_sleep_duration)
             self.__check_stop_file()
 
-    def __write_config(self):
-        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML writer
-        # SafeConfigParser removed (Python 2 only); this method is a stub
-        pass
-
-    def __read_config(self):
-        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML reader
-        # SafeConfigParser removed (Python 2 only); this method is a stub
-        return None
-
     def __setup_default_owner(self, scheduler):
         """Ensures that a RequestDoc exists in the database for the default owner.
 
@@ -642,79 +592,33 @@ class Commander(object):
         self.__logger.info("Starting up.")
         self.__setup_directories()
 
-        # process configuration
-        # TODO: Phase 3 — replace with cyhy-config/CommanderConfig TOML loading
-        if not Path(CONFIG_FILENAME).exists():
-            print('Configuration file not found: "%s"' % CONFIG_FILENAME, file=sys.stderr)
-            self.__write_config()
-            print("A default configuration file was created in the working directory.", file=sys.stderr)
-            print("Please edit and relaunch.", file=sys.stderr)
-            self.__logger.error("Configuration file not found. Exiting.")
-            sys.exit(-1)
+        config = self.__config
+        self.__logger.info("Configuration loaded successfully.")
 
-        config = self.__read_config()
-        # TODO: Phase 3 — all config.get() calls below will be replaced with
-        # CommanderConfig attribute access
-        if self.__config_section is None:
-            config_section = DEFAULT_SECTION
-        else:
-            config_section = self.__config_section
-        self.__logger.info('Reading configuration section: "%s"' % config_section)
-
-        # TODO: Phase 3 — replace these config.get() calls with CommanderConfig fields
-        nmap_hosts = []  # TODO: Phase 3 — config.get(config_section, NMAP_HOSTS).split(",")
-        nessus_hosts = []  # TODO: Phase 3 — config.get(config_section, NESSUS_HOSTS).split(",")
-        # remove any duplicates
-        nmap_hosts = list(set(nmap_hosts))
-        nessus_hosts = list(set(nessus_hosts))
-        # clean up the host lists and sort them
-        nmap_hosts = sorted([h.strip() for h in nmap_hosts if h])
-        nessus_hosts = sorted([h.strip() for h in nessus_hosts if h])
-        # clean up empty lists from config
-        if not nmap_hosts:
-            nmap_hosts = None
-        if not nessus_hosts:
-            nessus_hosts = None
+        # Use config fields directly from the Pydantic model
+        nmap_hosts = sorted(set(config.nmap_hosts))
+        nessus_hosts = sorted(set(config.nessus_hosts))
 
         self.__logger.info("nmap hosts: %s" % nmap_hosts)
         self.__logger.info("nessus hosts: %s" % nessus_hosts)
-        # TODO: Phase 3 — replace with config.jobs_per_nmap_host
-        jobs_per_nmap_host = 8  # TODO: Phase 3 — config.getint(config_section, JOBS_PER_NMAP_HOST)
+        jobs_per_nmap_host = config.jobs_per_nmap_host
         self.__logger.info("Jobs per nmap host: %d", jobs_per_nmap_host)
-        # TODO: Phase 3 — replace with config.jobs_per_nessus_host
-        jobs_per_nessus_host = 8  # TODO: Phase 3 — config.getint(config_section, JOBS_PER_NESSUS_HOST)
+        jobs_per_nessus_host = config.jobs_per_nessus_host
         self.__logger.info("Jobs per nessus host: %d", jobs_per_nessus_host)
-        # TODO: Phase 3 — replace with config.next_scan_limit
-        self.__next_scan_limit = 2000  # TODO: Phase 3 — config.getint(config_section, NEXT_SCAN_LIMIT)
         self.__logger.info("Next scan fetch limit: %d", self.__next_scan_limit)
-        # TODO: Phase 3 — replace with config.poll_interval
-        self.__poll_interval = 30  # TODO: Phase 3 — config.getint(config_section, POLL_INTERVAL)
-        self.__logger.info("Poll interval: %d", self.__poll_interval)
-        # TODO: Phase 3 — replace with config.mongodb_database / config.mongodb_uri
-        db_name = "cyhy"  # TODO: Phase 3 — config.get(config_section, DATABASE_NAME)
-        db_uri = "mongodb://localhost:27017/"  # TODO: Phase 3 — config.get(config_section, DATABASE_URI)
-        self.__setup_db(db_name, db_uri)
+        self.__logger.info("Poll interval: %d", self.__config.poll_interval)
+        self.__setup_db(config.mongodb_database, config.mongodb_uri)
         self.__logger.info("Database: %s", self.__db)
-        # TODO: Phase 3 — replace with config.test_mode
-        self.__test_mode = False  # TODO: Phase 3 — config.getboolean(config_section, TEST_MODE)
         self.__logger.info("Test mode: %s", self.__test_mode)
-        # TODO: Phase 3 — replace with config.keep_failures
-        self.__keep_failures = False  # TODO: Phase 3 — config.getboolean(config_section, KEEP_FAILURES)
-        # TODO: Phase 3 — replace with config.job_processing_threads
-        job_processing_thread_count = 4  # TODO: Phase 3 — config.getint(config_section, JOB_PROCESSING_THREADS)
+        self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
+        job_processing_thread_count = 4
         self.__logger.info(
             "Number of job processing threads: %d", job_processing_thread_count
         )
-        self.__logger.info("Keep failed jobs: %s", self.__keep_failures)
-        # TODO: Phase 3 — replace with config.keep_successes
-        self.__keep_successes = False  # TODO: Phase 3 — config.getboolean(config_section, KEEP_SUCCESSES)
         self.__logger.info("Keep successful jobs: %s", self.__keep_successes)
-        # TODO: Phase 3 — replace with config.shutdown_when_idle
-        self.__shutdown_when_idle = False  # TODO: Phase 3 — config.getboolean(config_section, SHUTDOWN_WHEN_IDLE)
         self.__logger.info("Idle shutdown: %s", self.__shutdown_when_idle)
         self.__logger.info('Default owner: "%s"' % DEFAULT_OWNER)
-        # TODO: Phase 3 — replace with config.default_scheduler
-        default_scheduler = "PERSISTENT1"  # TODO: Phase 3 — config.get(config_section, DEFAULT_SCHEDULER)
+        default_scheduler = "PERSISTENT1"
         self.__logger.info('Default scheduler: "%s"' % default_scheduler)
         self.__setup_default_owner(default_scheduler)
         self.__setup_sources()
@@ -773,12 +677,13 @@ class Commander(object):
             try:
                 # record time at start of duty cycle
                 cycle_start_time = time.time()
-                next_cycle_start_time = cycle_start_time + self.__poll_interval
+                next_cycle_start_time = cycle_start_time + self.__config.poll_interval
 
                 # check for hosts that are coming off of cooldown
                 self.__logger.debug("Checking for hosts to bring off of cooldown")
+                cooldown_duration = self.__config.scanner_reliability.cooldown_duration_minutes * 60
                 for host_info in self.__hosts_on_cooldown[:]:
-                    cooldown_end = host_info["cooldown_start"] + COOLDOWN_DURATION
+                    cooldown_end = host_info["cooldown_start"] + cooldown_duration
                     if time.time() >= cooldown_end:
                         for group in host_info["work_groups"]:
                             work_groups[group][1].append(host_info["host"])
@@ -800,8 +705,9 @@ class Commander(object):
 
                 # check for hosts that have had multiple exceptions
                 self.__logger.debug("Checking for hosts with too many exceptions")
+                exceptions_before_cooldown = self.__config.scanner_reliability.exceptions_before_cooldown
                 for (host, count) in self.__host_exceptions.items():
-                    if count > NUM_EXCEPTIONS_ALLOWED:
+                    if count > exceptions_before_cooldown:
                         groups = []
                         for (index, group) in enumerate(work_groups):
                             if host in group[1]:
@@ -895,6 +801,25 @@ class Commander(object):
         self.__logger.info("Shutting down.")
 
 
+def load_config() -> CommanderConfig:
+    """Load and validate commander configuration using cyhy-config.
+
+    Searches for configuration in the following order:
+    1. CYHY_CONFIG_PATH environment variable (file path)
+    2. CYHY_CONFIG_SSM_PATH environment variable (AWS SSM Parameter Store path)
+    3. ./cyhy.toml
+    4. ~/.cyhy/cyhy.toml
+    5. /etc/cyhy.toml
+
+    Returns:
+        CommanderConfig: Validated configuration object.
+
+    Raises:
+        Exception: If no configuration file is found or validation fails.
+    """
+    return get_config(model=CommanderConfig)
+
+
 def cli_entry() -> None:
     """Entry point for the cyhy-commander CLI."""
     parser = argparse.ArgumentParser(
@@ -906,9 +831,6 @@ def cli_entry() -> None:
     )
     parser.add_argument(
         "-l", "--stdout-log", action="store_true", help="Log to standard out"
-    )
-    parser.add_argument(
-        "-s", "--section", default=None, help="Configuration section to use"
     )
     args = parser.parse_args()
     # TODO: Phase 5 — call asyncio.run(main(args))
@@ -922,7 +844,8 @@ def cli_entry() -> None:
         workingDir.mkdir()
     os.chdir(str(workingDir))
 
-    commander = Commander(args.section, args.debug, args.stdout_log)
+    config = load_config()
+    commander = Commander(config, args.debug, args.stdout_log)
 
     signal.signal(signal.SIGTERM, commander.handle_term)
     signal.signal(signal.SIGINT, commander.handle_term)
