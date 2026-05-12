@@ -1,0 +1,136 @@
+# cyhy.toml.example — CyHy Commander Configuration
+#
+# Copy this file to one of the following locations and fill in the required
+# values.  cyhy-config searches these paths in order:
+#
+#   1. Path in the CYHY_CONFIG_PATH environment variable
+#   2. AWS SSM Parameter Store path in CYHY_CONFIG_SSM_PATH
+#   3. ./cyhy.toml          (current working directory)
+#   4. ~/.cyhy/cyhy.toml    (user home directory)
+#   5. /etc/cyhy.toml       (system-wide)
+#
+# Required fields (no defaults — must be set):
+#   mongodb_uri, mongodb_database, nmap_hosts, nessus_hosts
+#
+# All other fields are optional and fall back to the defaults shown here.
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+
+# MongoDB connection string.  Use a mongodb+srv:// URI for Atlas/DocumentDB.
+# For AWS DocumentDB, append TLS parameters:
+#   "mongodb://user:pass@cluster.docdb.amazonaws.com:27017/?tls=true&tlsCAFile=/path/to/rds-combined-ca-bundle.pem"
+mongodb_uri = "mongodb://localhost:27017/"
+
+# Name of the MongoDB database that holds the CyHy collections.
+mongodb_database = "cyhy"
+
+# ---------------------------------------------------------------------------
+# Scanner hosts
+# ---------------------------------------------------------------------------
+
+# List of hostnames (or IPs) running the nmap scanner daemon (cyhy-runner).
+# At least one entry is required.
+nmap_hosts = ["scanner1.example.com", "scanner2.example.com"]
+
+# List of hostnames (or IPs) running the Nessus scanner daemon.
+# At least one entry is required.
+nessus_hosts = ["nessus1.example.com"]
+
+# Maximum number of concurrent jobs dispatched to each nmap scanner host.
+# Default: 8
+jobs_per_nmap_host = 8
+
+# Maximum number of concurrent jobs dispatched to each Nessus scanner host.
+# Default: 8
+jobs_per_nessus_host = 8
+
+# ---------------------------------------------------------------------------
+# Operational settings
+# ---------------------------------------------------------------------------
+
+# Seconds between work-cycle iterations (poll scanner hosts, balance hosts,
+# check next-scan times).  Default: 30
+poll_interval = 30
+
+# Maximum number of hosts moved from DONE → WAITING per check_host_next_scans
+# call.  Limits database load on large deployments.  Default: 2000
+next_scan_limit = 2000
+
+# When true, jobs are created and pushed to scanners but results are not
+# written back to the database.  Useful for dry-run testing.  Default: false
+test_mode = false
+
+# When true, failed job directories are kept on disk for post-mortem analysis
+# instead of being deleted.  Default: false
+keep_failures = false
+
+# When true, successfully processed job directories are kept on disk.
+# Default: false
+keep_successes = false
+
+# When true, the commander exits cleanly once all hosts have been scanned and
+# no more work remains.  Useful for one-shot batch runs.  Default: false
+shutdown_when_idle = false
+
+# Logging verbosity.  One of: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+# Default: "INFO"
+log_level = "INFO"
+
+# ---------------------------------------------------------------------------
+# Job sizing — IPs bundled into a single job per scan type
+# ---------------------------------------------------------------------------
+# Larger values reduce SSH/rsync overhead but increase per-job memory usage
+# on the scanner host.  All values must be positive integers.
+
+[job_sizing]
+
+# IPs per NETSCAN1 (initial host-discovery) job.  Default: 128
+netscan1 = 128
+
+# IPs per NETSCAN2 (confirmation host-discovery) job.  Default: 64
+netscan2 = 64
+
+# IPs per PORTSCAN job.  Default: 8
+portscan = 8
+
+# IPs per VULNSCAN (Nessus) job.  Default: 4
+vulnscan = 4
+
+# ---------------------------------------------------------------------------
+# Scanner reliability — cooldown behaviour after repeated errors
+# ---------------------------------------------------------------------------
+
+[scanner_reliability]
+
+# Number of consecutive exceptions on a scanner host before it is placed on
+# cooldown and removed from the active work group.  Default: 2
+exceptions_before_cooldown = 2
+
+# Minutes a scanner host remains on cooldown before being re-admitted to the
+# active work group.  Default: 30
+cooldown_duration_minutes = 30
+
+# ---------------------------------------------------------------------------
+# Network timeouts — all values in seconds, all must be positive integers
+# ---------------------------------------------------------------------------
+# Constraint: ssh_connect must be strictly less than ssh_command.
+
+[timeouts]
+
+# Seconds to wait for an SSH connection to be established.  Default: 10
+ssh_connect = 10
+
+# Seconds to wait for an SSH command to complete.  Default: 60
+ssh_command = 60
+
+# Seconds between SSH keepalive probes (ServerAliveInterval).  Default: 30
+ssh_keepalive_interval = 30
+
+# Maximum number of unanswered SSH keepalive probes before the connection is
+# dropped (ServerAliveCountMax).  Default: 2
+ssh_keepalive_count = 2
+
+# Seconds to wait for an rsync operation to complete.  Default: 300
+rsync_operation = 300
