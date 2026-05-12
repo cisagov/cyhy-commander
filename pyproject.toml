@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cyhy-commander"
+dynamic = ["version"]
+requires-python = ">=3.14"
+description = "CyHy Commander: job orchestration and scanner management"
+license = { text = "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication" }
+dependencies = [
+    "beanie>=1.21.0",
+    "cyhy-config>=1.0.0",
+    "cyhy-db>=1.0.0",
+    "cyhy-logging>=1.0.0",
+    "lockfile==0.12.2",
+    "motor>=3.6.0",
+    "numpy>=1.26.0",
+    "pydantic>=2.0.0",
+    "pymongo>=4.10.0",
+]
+
+[project.scripts]
+cyhy-commander = "cyhy_commander.commander:cli_entry"
+
+[project.optional-dependencies]
+test = [
+    "hypothesis>=6.100.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "mongomock-motor>=0.0.21",
+]
+dev = [
+    "black==24.4.2",
+    "bandit[toml]==1.7.9",
+    "flake8==7.1.0",
+    "flake8-docstrings==1.7.0",
+    "isort==5.13.2",
+    "mypy==1.10.0",
+    "pre-commit==3.7.1",
+    "pyupgrade==3.16.0",
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cyhy_commander"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"cyhy_commander/jobs" = "cyhy_commander/jobs"
+
+[tool.black]
+line-length = 80
+target-version = ["py314"]
+
+[tool.isort]
+profile = "black"
+line_length = 80
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = []
+
+[tool.coverage.run]
+source = ["cyhy_commander"]
+omit = ["tests/*", "cyhy_commander/jobs/*"]
+
+[tool.coverage.report]
+fail_under = 80
