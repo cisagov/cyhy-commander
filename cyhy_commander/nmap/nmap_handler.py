@@ -1,6 +1,8 @@
-from xml.sax import ContentHandler, parse, SAXNotRecognizedException
-from xml.parsers.expat import ExpatError
+"""SAX content handler for parsing nmap XML output."""
+
 import datetime
+from xml.sax import ContentHandler, SAXNotRecognizedException
+
 import netaddr
 
 
@@ -15,7 +17,10 @@ def copy_attrs(source, dest, skip=None):
 
 
 class NmapContentHandler(ContentHandler):
+    """SAX handler that parses an nmap XML report into structured callbacks."""
+
     def __init__(self, host_callback, end_callback):
+        """Initialize the handler with host and end callback functions."""
         ContentHandler.__init__(self)
         self.host_callback = host_callback
         self.end_callback = end_callback
@@ -32,6 +37,7 @@ class NmapContentHandler(ContentHandler):
         )
 
     def startElement(self, name, attrs):
+        """Handle the opening of an XML element."""
         # clear characters buffer
         self.chars = ""
         if not self.isNmapFile:
@@ -39,16 +45,18 @@ class NmapContentHandler(ContentHandler):
                 self.isNmapFile = True
                 self.xmloutputversion = attrs["xmloutputversion"]
             else:
-                raise SAXNotRecognizedException("XML does not look like Nmap data.")
+                raise SAXNotRecognizedException(
+                    "XML does not look like Nmap data."
+                )
         elif name == "host":
             self.first_osmatch_done_for_host = False
             self.currentHost = {"ports": {}}
             if "starttime" in attrs:
-                self.currentHost["starttime"] = datetime.datetime.utcfromtimestamp(
-                    int(attrs["starttime"])
+                self.currentHost["starttime"] = (
+                    datetime.datetime.utcfromtimestamp(int(attrs["starttime"]))
                 )
-                self.currentHost["endtime"] = datetime.datetime.utcfromtimestamp(
-                    int(attrs["endtime"])
+                self.currentHost["endtime"] = (
+                    datetime.datetime.utcfromtimestamp(int(attrs["endtime"]))
                 )
             else:
                 self.currentHost["starttime"] = self.taskStartTime
@@ -104,6 +112,7 @@ class NmapContentHandler(ContentHandler):
                 )
 
     def endElement(self, name):
+        """Handle the closing of an XML element."""
         if name == "cpe" and not self.first_osmatch_done_for_host:
             if "cpe" not in self.cpeTarget:
                 self.cpeTarget["cpe"] = []
@@ -120,4 +129,5 @@ class NmapContentHandler(ContentHandler):
             self.first_osmatch_done_for_host = True
 
     def characters(self, content):
+        """Accumulate character data between XML tags."""
         self.chars += content

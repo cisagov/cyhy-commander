@@ -59,7 +59,9 @@ class TimeoutsConfig(BaseModel):
     def connect_less_than_command(self) -> TimeoutsConfig:
         """Validate that ssh_connect timeout is less than ssh_command timeout."""
         if self.ssh_connect >= self.ssh_command:
-            raise ValueError("ssh_connect must be less than ssh_command timeout")
+            raise ValueError(
+                "ssh_connect must be less than ssh_command timeout"
+            )
         return self
 
 

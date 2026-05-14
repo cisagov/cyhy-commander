@@ -15,7 +15,6 @@ from ipaddress import IPv4Address
 # Third-party libraries
 import beanie
 import mongomock_motor
-import pytest
 from cyhy_db.models import KEVDoc, PortScanDoc, TicketDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol, TicketAction
 from hypothesis import given, settings

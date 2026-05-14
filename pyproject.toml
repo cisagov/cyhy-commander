@@ -68,6 +68,21 @@ ignore_missing_imports = false
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.flake8]
+max-line-length = 80
+# Select (turn on)
+# * Complexity violations reported by mccabe (C)
+# * Documentation conventions compliance reported by pydocstyle (D)
+# * Default errors and warnings reported by pycodestyle (E and W)
+# * Default errors reported by pyflakes (F)
+# * Default warnings reported by flake8-bugbear (B)
+# * The B950 flake8-bugbear opinionated warning
+select = ["C", "D", "E", "F", "W", "B", "B950"]
+# Ignore flake8's default warning about maximum line length (hard stop).
+# Instead use flake8-bugbear's B950, which allows up to 10% overage.
+# Also ignore W503 (line break before binary operator) — disagrees with PEP8.
+extend-ignore = ["E501", "W503"]
+
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = []

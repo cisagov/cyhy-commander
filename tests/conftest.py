@@ -71,7 +71,9 @@ def mock_db():
     db = client["test_db"]
 
     async def _init():
-        await beanie.init_beanie(database=db, document_models=_ALL_DOCUMENT_MODELS)
+        await beanie.init_beanie(
+            database=db, document_models=_ALL_DOCUMENT_MODELS
+        )
 
     asyncio.run(_init())
     yield db

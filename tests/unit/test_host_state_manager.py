@@ -71,7 +71,10 @@ class TestPortscanRunning:
     """PORTSCAN / RUNNING transitions."""
 
     def test_has_open_ports_true_goes_to_vulnscan_waiting(self, manager):
-        """PORTSCAN/RUNNING + has_open_ports=True → VULNSCAN/WAITING, finished=PORTSCAN."""
+        """PORTSCAN/RUNNING + has_open_ports=True → VULNSCAN/WAITING.
+
+        finished=PORTSCAN.
+        """
         result = manager.new_state(
             Stage.PORTSCAN, Status.RUNNING, has_open_ports=True
         )
@@ -81,7 +84,10 @@ class TestPortscanRunning:
         assert result.finished_stage == Stage.PORTSCAN
 
     def test_has_open_ports_false_goes_to_portscan_done(self, manager):
-        """PORTSCAN/RUNNING + has_open_ports=False → PORTSCAN/DONE, finished=PORTSCAN."""
+        """PORTSCAN/RUNNING + has_open_ports=False → PORTSCAN/DONE.
+
+        finished=PORTSCAN.
+        """
         result = manager.new_state(
             Stage.PORTSCAN, Status.RUNNING, has_open_ports=False
         )
@@ -129,7 +135,9 @@ class TestDoneTerminalState:
 
     def test_done_ignores_was_failure_flag(self, manager):
         """DONE/DONE with was_failure=True still returns unchanged state (terminal)."""
-        result = manager.new_state(Stage.PORTSCAN, Status.DONE, was_failure=True)
+        result = manager.new_state(
+            Stage.PORTSCAN, Status.DONE, was_failure=True
+        )
         assert result.new_stage == Stage.PORTSCAN
         assert result.new_status == Status.DONE
         assert result.was_changed is False
@@ -155,7 +163,10 @@ class TestFailureTransitions:
 
     @pytest.mark.parametrize("stage", list(Stage))
     def test_failure_from_running_reverts_to_waiting(self, manager, stage):
-        """Any stage/RUNNING + was_failure=True → same_stage/WAITING, was_changed=True."""
+        """Any stage/RUNNING + was_failure=True → same_stage/WAITING.
+
+        was_changed=True.
+        """
         result = manager.new_state(stage, Status.RUNNING, was_failure=True)
         assert result.new_stage == stage
         assert result.new_status == Status.WAITING
@@ -164,7 +175,10 @@ class TestFailureTransitions:
 
     @pytest.mark.parametrize("stage", list(Stage))
     def test_failure_from_waiting_returns_unchanged(self, manager, stage):
-        """Any stage/WAITING + was_failure=True → same_stage/WAITING, was_changed=False."""
+        """Any stage/WAITING + was_failure=True → same_stage/WAITING.
+
+        was_changed=False.
+        """
         result = manager.new_state(stage, Status.WAITING, was_failure=True)
         assert result.new_stage == stage
         assert result.new_status == Status.WAITING
@@ -182,12 +196,16 @@ class TestFailureTransitions:
 
     def test_failure_preserves_stage(self, manager):
         """Failure transition keeps the host in its current stage."""
-        result = manager.new_state(Stage.PORTSCAN, Status.RUNNING, was_failure=True)
+        result = manager.new_state(
+            Stage.PORTSCAN, Status.RUNNING, was_failure=True
+        )
         assert result.new_stage == Stage.PORTSCAN
 
     def test_failure_finished_stage_is_none(self, manager):
         """Failure transition never sets finished_stage."""
-        result = manager.new_state(Stage.VULNSCAN, Status.RUNNING, was_failure=True)
+        result = manager.new_state(
+            Stage.VULNSCAN, Status.RUNNING, was_failure=True
+        )
         assert result.finished_stage is None
 
 
@@ -313,9 +331,11 @@ class TestReturnType:
         assert isinstance(result, StateTransitionResult)
 
     def test_result_is_immutable(self, manager):
-        """StateTransitionResult is frozen — attribute assignment raises FrozenInstanceError."""
+        """Result is frozen — attribute assignment raises FrozenInstanceError."""
         result = manager.new_state(Stage.NETSCAN1, Status.RUNNING, up=True)
-        with pytest.raises(Exception):  # FrozenInstanceError is a subclass of AttributeError
+        with pytest.raises(
+            AttributeError
+        ):  # FrozenInstanceError is a subclass of AttributeError
             result.new_stage = Stage.VULNSCAN  # type: ignore[misc]
 
     def test_result_fields_have_correct_types(self, manager):
@@ -325,4 +345,6 @@ class TestReturnType:
         assert isinstance(result.new_status, Status)
         assert isinstance(result.was_changed, bool)
         # finished_stage is Stage | None
-        assert result.finished_stage is None or isinstance(result.finished_stage, Stage)
+        assert result.finished_stage is None or isinstance(
+            result.finished_stage, Stage
+        )

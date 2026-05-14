@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Nessus vulnerability scan job controller."""
 
 # Standard Python Libraries
 import copy
@@ -69,6 +70,7 @@ if DEBUG:
 
 
 def setup_logging():
+    """Configure the module-level logger."""
     global LOGGER
     logging.captureWarnings(True)  # Added to capture InsecureRequestWarnings
     LOGGER = logging.getLogger(__name__)
@@ -80,12 +82,16 @@ def setup_logging():
 
 
 def error_exit(message):
+    """Print message to stderr and exit with a non-zero status."""
     print(message, file=sys.stderr)
     sys.exit(1)
 
 
 class NessusController:
+    """Client for the Nessus REST API."""
+
     def __init__(self, nessus_url, nessus_username, nessus_password):
+        """Initialize the controller with connection credentials."""
         self.url = nessus_url
         self.username = nessus_username
         self.password = nessus_password
@@ -98,7 +104,9 @@ class NessusController:
 
         while num_retries < FAILED_REQUEST_MAX_RETRIES:
             if num_retries > 0:
-                LOGGER.warning("Waiting %d seconds...", FAILED_REQUEST_RETRY_WAIT_SEC)
+                LOGGER.warning(
+                    "Waiting %d seconds...", FAILED_REQUEST_RETRY_WAIT_SEC
+                )
                 time.sleep(FAILED_REQUEST_RETRY_WAIT_SEC)
 
             headers = {
@@ -128,11 +136,17 @@ class NessusController:
                 )
             elif method == "POST":
                 response = requests.post(
-                    self.url + target, headers=headers, data=payload, verify=VERIFY_SSL
+                    self.url + target,
+                    headers=headers,
+                    data=payload,
+                    verify=VERIFY_SSL,
                 )
             elif method == "PUT":
                 response = requests.put(
-                    self.url + target, headers=headers, data=payload, verify=VERIFY_SSL
+                    self.url + target,
+                    headers=headers,
+                    data=payload,
+                    verify=VERIFY_SSL,
                 )
             elif method == "DELETE":
                 response = requests.delete(
@@ -185,15 +199,18 @@ class NessusController:
         raise Warning("No policies found in list")
 
     def policy_list(self):
+        """Return the list of all policies from the Nessus server."""
         response = self.__make_request(POLICY_BASE, "GET")
-        if response.status_code == OK_STATUS and response.json().get("policies"):
+        if response.status_code == OK_STATUS and response.json().get(
+            "policies"
+        ):
             return response.json()
 
         raise Warning(f"Policy list failed; response={response.text}")
 
     def policy_details(self, policy_id):
+        """Return the full details for the given policy ID."""
         response = self.__make_request(
-            POLICY_DETAILS.format(policy_id=policy_id), "GET"
         )
         if response.status_code == OK_STATUS and response.json().get("uuid"):
             return response.json()
@@ -201,20 +218,27 @@ class NessusController:
         raise Warning(f"Get policy details failed; response={response.text}")
 
     def policy_create(self, policy_details):
+        """Create a new policy and return its details."""
         response = self.__make_request(POLICY_BASE, "POST", policy_details)
-        if response.status_code == OK_STATUS and response.json().get("policy_id"):
+        if response.status_code == OK_STATUS and response.json().get(
+            "policy_id"
+        ):
             return response.json()
 
         raise Warning(f"Policy creation failed; response={response.text}")
 
     def policy_copy(self, policy_id):
-        response = self.__make_request(POLICY_COPY.format(policy_id=policy_id), "POST")
+        """Copy an existing policy and return the new policy details."""
+        response = self.__make_request(
+            POLICY_COPY.format(policy_id=policy_id), "POST"
+        )
         if response.status_code == OK_STATUS and response.json().get("id"):
             return response.json()
 
         raise Warning(f"Policy copy failed; response={response.text}")
 
     def policy_edit(self, policy_id, policy_details):
+        """Edit an existing policy with the provided details."""
         response = self.__make_request(
             POLICY_EDIT.format(policy_id=policy_id), "PUT", policy_details
         )
@@ -224,6 +248,7 @@ class NessusController:
         raise Warning(f"Policy edit failed; response={response.text}")
 
     def policy_delete(self, policy_id):
+        """Delete the policy with the given ID."""
         response = self.__make_request(
             POLICY_DELETE.format(policy_id=policy_id), "DELETE"
         )
@@ -233,6 +258,7 @@ class NessusController:
         raise Warning(f"Policy delete failed; response={response.text}")
 
     def scan_new(self, targets, policy_id, scan_name, template_uuid):
+        """Create a new scan with the given targets, policy, name, and template."""
         scan_details = dict()
         scan_details["uuid"] = template_uuid
         scan_details["settings"] = dict()
@@ -247,34 +273,49 @@ class NessusController:
         raise Warning(f"Scan creation failed; response={response.text}")
 
     def scan_launch(self, scan_id):
-        response = self.__make_request(SCAN_LAUNCH.format(scan_id=scan_id), "POST")
-        if response.status_code == OK_STATUS and response.json().get("scan_uuid"):
+        """Launch the scan with the given ID and return the scan UUID."""
+        response = self.__make_request(
+            SCAN_LAUNCH.format(scan_id=scan_id), "POST"
+        )
+        if response.status_code == OK_STATUS and response.json().get(
+            "scan_uuid"
+        ):
             return response.json()
 
         raise Warning(f"Scan launch failed; response={response.text}")
 
     def scan_details(self, scan_id):
-        response = self.__make_request(SCAN_DETAILS.format(scan_id=scan_id), "GET")
+        """Retrieve details for the scan with the given ID."""
+        response = self.__make_request(
+            SCAN_DETAILS.format(scan_id=scan_id), "GET"
+        )
         if response.status_code == OK_STATUS and response.json().get("info"):
             return response.json()
 
         if response.status_code == NOT_FOUND_STATUS:
-            raise Warning(f"Scan id {scan_id} not found; response={response.text}")
+            raise Warning(
+                f"Scan id {scan_id} not found; response={response.text}"
+            )
 
         raise Warning(f"Get scan details failed; response={response.text}")
 
     def scan_status(self, scan_id):
+        """Return the current status string for the given scan."""
         scan_details = self.scan_details(scan_id)
         return scan_details["info"]["status"]
 
     def scan_delete(self, scan_id):
-        response = self.__make_request(SCAN_DELETE.format(scan_id=scan_id), "DELETE")
+        """Delete the scan with the given ID."""
+        response = self.__make_request(
+            SCAN_DELETE.format(scan_id=scan_id), "DELETE"
+        )
         if response.status_code == OK_STATUS:
             return response
 
         raise Warning(f"Scan delete failed; response={response.text}")
 
     def report_ready(self, scan_id, file_id):
+        """Return True if the report for the given scan and file ID is ready."""
         response = self.__make_request(
             REPORT_STATUS.format(scan_id=scan_id, file_id=file_id), "GET"
         )
@@ -284,6 +325,7 @@ class NessusController:
         raise Warning(f"Unable to retrieve report: response={response.text}")
 
     def report_download(self, scan_id):
+        """Export and download the Nessus report for the given scan ID."""
         response = self.__make_request(
             REPORT_EXPORT.format(scan_id=scan_id), "POST", {"format": "nessus"}
         )
@@ -294,17 +336,22 @@ class NessusController:
                 time.sleep(WAIT_TIME_SEC)
             LOGGER.info("Report ready for download")
             response = self.__make_request(
-                REPORT_DOWNLOAD.format(scan_id=scan_id, report_file_id=report_file_id),
+                REPORT_DOWNLOAD.format(
+                    scan_id=scan_id, report_file_id=report_file_id
+                ),
                 "GET",
             )
             if response.status_code == OK_STATUS:
                 return response.text
 
-            raise Warning(f"Scan report download failed; response={response.text}")
+            raise Warning(
+                f"Scan report download failed; response={response.text}"
+            )
 
         raise Warning(f"Scan report export failed; response={response.text}")
 
     def destroy_session(self):
+        """Destroy the current Nessus API session."""
         response = self.__make_request(LOGIN, "DELETE")
         if response.status_code == OK_STATUS:
             return response
@@ -313,6 +360,7 @@ class NessusController:
 
 
 def main():
+    """Run the Nessus vulnerability scan job."""
     setup_logging()
     LOGGER.info("Nessus job starting")
 
@@ -321,7 +369,9 @@ def main():
         NESSUS_API_CONFIGURATION_FILE,
     )
     with open(NESSUS_API_CONFIGURATION_FILE) as configuration_file:
-        api_configuration = yaml.load(configuration_file, Loader=yaml.SafeLoader)
+        api_configuration = yaml.load(
+            configuration_file, Loader=yaml.SafeLoader
+        )
 
     # find targets file
     LOGGER.info("Searching for targets file")
@@ -355,7 +405,9 @@ def main():
     time.sleep(secrets.randbelow(MAX_SLEEP_SEC + 1))
 
     try:
-        LOGGER.info("Instantiating Nessus controller at: %s", api_configuration["url"])
+        LOGGER.info(
+            "Instantiating Nessus controller at: %s", api_configuration["url"]
+        )
         controller = NessusController(
             api_configuration["url"],
             api_configuration["credentials"]["username"],
@@ -366,9 +418,13 @@ def main():
         LOGGER.info(
             "Searching for base policy: %s", api_configuration["policy"]["name"]
         )
-        base_policy = controller.find_policy(api_configuration["policy"]["name"])
+        base_policy = controller.find_policy(
+            api_configuration["policy"]["name"]
+        )
         if base_policy is None:
-            error_exit(f"Could not find policy {api_configuration['policy']['name']}")
+            error_exit(
+                f"Could not find policy {api_configuration['policy']['name']}"
+            )
     except KeyError as err:
         error_exit(
             f"Missing required key {str(err)} from Nessus API configuration file"
@@ -391,7 +447,8 @@ def main():
         error_exit("No new policy id returned")
     if new_policy["policy_id"] == base_policy["id"]:
         error_exit(
-            f"New policy has the same id as the source policy: {new_policy['policy_id']}"
+            "New policy has the same id as the source policy: "
+            f"{new_policy['policy_id']}"
         )
     new_policy_id = new_policy["policy_id"]
     LOGGER.info(
@@ -431,7 +488,9 @@ def main():
     scan_found = False
     scan_status = controller.scan_status(new_scan_id)
     while scan_status in [SCAN_RUNNING_STATUS, SCAN_PROCESSING_STATUS]:
-        LOGGER.info("Waiting for scan to complete (current status: %s)", scan_status)
+        LOGGER.info(
+            "Waiting for scan to complete (current status: %s)", scan_status
+        )
         scan_found = True
         time.sleep(WAIT_TIME_SEC)
         scan_status = controller.scan_status(new_scan_id)
@@ -443,7 +502,8 @@ def main():
         LOGGER.info("Scan completed")
     else:
         raise Warning(
-            f"Scan id {new_scan_id} stopped running with status {scan_details_response['info'].get('status')}"
+            f"Scan id {new_scan_id} stopped running with status "
+            f"{scan_details_response['info'].get('status')}"
         )
 
     # download report and send to stdout

@@ -14,10 +14,10 @@ import tempfile
 from datetime import datetime, timezone
 
 from cyhy_db.models import HostDoc, PortScanDoc
-from cyhy_db.models.enum import Stage, Status
+from cyhy_db.models.enum import Stage
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 from . import db_ops
-from cyhy_logging import CYHY_ROOT_LOGGER
 
 logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.job_source")
 

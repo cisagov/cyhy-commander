@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Sleep for a random exponentially-distributed duration."""
 
 # Standard Python Libraries
 import random

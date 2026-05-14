@@ -8,7 +8,7 @@ Requirements: AC-8.1, FR-8.2
 """
 
 import asyncio
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -112,8 +112,10 @@ class TestTimedeltaForPriorityInterpolation:
         assert result == timedelta(hours=60)
 
     def test_interpolated_value_is_between_anchor_bounds(self, scheduler):
-        """Any priority between two anchors produces an interval between those anchors."""
-        # Between -1 (7 days) and -4 (4 days)
+        """Any priority between two anchors produces an interval between those anchors.
+
+        Verifies interpolation stays within bounds.
+        """
         result = scheduler.timedelta_for_priority(-2)
         assert timedelta(days=4) < result < timedelta(days=7)
 
@@ -124,7 +126,7 @@ class TestTimedeltaForPriorityInterpolation:
         for i in range(len(intervals) - 1):
             assert intervals[i] > intervals[i + 1], (
                 f"Interval for priority {priorities[i]} ({intervals[i]}) "
-                f"should be greater than for {priorities[i+1]} ({intervals[i+1]})"
+                f"should be greater than for {priorities[i + 1]} ({intervals[i + 1]})"
             )
 
 
@@ -150,9 +152,9 @@ class TestTimedeltaForPriorityClamping:
         """timedelta_for_priority always returns a timedelta."""
         for priority in [1, 0, -1, -4, -8, -16, 5, -20]:
             result = scheduler.timedelta_for_priority(priority)
-            assert isinstance(result, timedelta), (
-                f"Expected timedelta for priority={priority}, got {type(result)}"
-            )
+            assert isinstance(
+                result, timedelta
+            ), f"Expected timedelta for priority={priority}, got {type(result)}"
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +353,10 @@ class TestCalculatePriority:
         assert result == 1
 
     def test_kev_vulnerability_returns_minus_16(self):
-        """Host with severity 4 vulnerability → priority -16 (KEV check removed; severity-based)."""
+        """Host with severity 4 vulnerability → priority -16.
+
+        KEV check removed; severity-based priority applies.
+        """
         host = self._make_host(up=True)
         mock_vuln = self._make_vuln_scan_doc_mock(kev_count=1, max_severity=4)
 
@@ -403,7 +408,9 @@ class TestCalculatePriority:
     def test_no_kev_no_vulns_returns_minus_1(self):
         """Host with no vulnerabilities (first_or_none returns None) → priority -1."""
         host = self._make_host(up=True)
-        mock_vuln = self._make_vuln_scan_doc_mock(kev_count=0, max_severity=None)
+        mock_vuln = self._make_vuln_scan_doc_mock(
+            kev_count=0, max_severity=None
+        )
 
         with patch("cyhy_commander.scheduler.VulnScanDoc", mock_vuln):
             result = asyncio.run(_calculate_priority(host))

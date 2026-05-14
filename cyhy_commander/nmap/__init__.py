@@ -1,3 +1,5 @@
+"""Nmap importer package."""
+
 __all__ = ["NmapImporter", "NmapContentHandler"]
 
 from .nmap_handler import NmapContentHandler

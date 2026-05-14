@@ -15,12 +15,12 @@ import random
 # Third-party libraries
 import netaddr
 from cyhy_db.models.enum import Stage
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 # Local libraries
 from cyhy_commander import db_ops
 from cyhy_commander.nessus import NessusImporter
 from cyhy_commander.nmap import NmapImporter
-from cyhy_logging import CYHY_ROOT_LOGGER
 
 OUTPUT_FILENAME = "job.out"
 TARGETS_GLOB = "*SCAN*.txt"
@@ -45,6 +45,7 @@ class NmapSink:
         self.__stage = stage
 
     def __str__(self) -> str:
+        """Return a string representation of this sink."""
         return f"<NmapSink {self.__stage}>"
 
     def can_handle(self, job_path: str) -> bool:
@@ -81,6 +82,7 @@ class NessusSink:
     """
 
     def __str__(self) -> str:
+        """Return a string representation of this sink."""
         return "<NessusSink>"
 
     def can_handle(self, job_path: str) -> bool:
@@ -116,6 +118,7 @@ class NoOpSink:
     """
 
     def __str__(self) -> str:
+        """Return a string representation of this sink."""
         return "<NoOpSink>"
 
     async def __transition_ip_file(
@@ -176,9 +179,12 @@ class TryAgainSink:
 
     def __init__(self) -> None:
         """Initialise the TryAgainSink."""
-        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.job_sink")
+        self.__logger = logging.getLogger(
+            CYHY_ROOT_LOGGER + ".commander.job_sink"
+        )
 
     def __str__(self) -> str:
+        """Return a string representation of this sink."""
         return "<TryAgainSink>"
 
     def can_handle(self, job_path: str) -> bool:

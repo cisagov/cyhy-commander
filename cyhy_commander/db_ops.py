@@ -14,19 +14,19 @@ from ipaddress import IPv4Address
 
 # Third-party libraries
 from beanie.operators import In, Set
-from cyhy_db.models import HostDoc, RequestDoc, TallyDoc, SystemControlDoc
+from cyhy_db.models import HostDoc, RequestDoc, SystemControlDoc, TallyDoc
 from cyhy_db.models.enum import (
     ControlAction,
     ControlTarget,
+    ScanType,
     Scheduler,
     Stage,
     Status,
-    ScanType,
 )
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 from .host_state_manager import DefaultHostStateManager
 from .scheduler import DefaultScheduler
-from cyhy_logging import CYHY_ROOT_LOGGER
 
 logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.db_ops")
 
@@ -80,7 +80,7 @@ async def fetch_ready_hosts(
         .sort(
             [
                 (HostDoc.priority, 1),  # ascending: most urgent first
-                (HostDoc.r, 1),         # random tiebreaker
+                (HostDoc.r, 1),  # random tiebreaker
             ]
         )
         .limit(count)
@@ -196,7 +196,9 @@ async def balance_ready_hosts() -> None:
         # Check scan windows — skip this org if outside all windows.
         windows = request.windows or []
         if windows and not any(_is_within_scan_window(w, now) for w in windows):
-            logger.debug("Owner %s is outside its scan window; skipping.", owner)
+            logger.debug(
+                "Owner %s is outside its scan window; skipping.", owner
+            )
             continue
 
         # Determine the concurrent scan limit for CYHY scans.
@@ -329,7 +331,9 @@ async def transition_host(
     ip_addr = IPv4Address(ip)
     host: HostDoc | None = await HostDoc.find_one(HostDoc.ip == ip_addr)
     if host is None:
-        logger.warning("transition_host: no HostDoc found for IP %s; skipping.", ip)
+        logger.warning(
+            "transition_host: no HostDoc found for IP %s; skipping.", ip
+        )
         return
 
     old_stage = host.stage

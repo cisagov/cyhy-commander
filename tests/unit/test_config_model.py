@@ -47,25 +47,33 @@ class TestJobSizingConfig:
 
     def test_explicit_values_round_trip(self):
         """Explicitly supplied values are preserved exactly."""
-        cfg = JobSizingConfig(netscan1=256, netscan2=128, portscan=16, vulnscan=8)
+        cfg = JobSizingConfig(
+            netscan1=256, netscan2=128, portscan=16, vulnscan=8
+        )
         assert cfg.netscan1 == 256
         assert cfg.netscan2 == 128
         assert cfg.portscan == 16
         assert cfg.vulnscan == 8
 
-    @pytest.mark.parametrize("field", ["netscan1", "netscan2", "portscan", "vulnscan"])
+    @pytest.mark.parametrize(
+        "field", ["netscan1", "netscan2", "portscan", "vulnscan"]
+    )
     def test_zero_value_raises(self, field):
         """Zero is not a valid value (gt=0 constraint)."""
         with pytest.raises(ValidationError):
             JobSizingConfig(**{field: 0})
 
-    @pytest.mark.parametrize("field", ["netscan1", "netscan2", "portscan", "vulnscan"])
+    @pytest.mark.parametrize(
+        "field", ["netscan1", "netscan2", "portscan", "vulnscan"]
+    )
     def test_negative_value_raises(self, field):
         """Negative values are not valid (gt=0 constraint)."""
         with pytest.raises(ValidationError):
             JobSizingConfig(**{field: -1})
 
-    @pytest.mark.parametrize("field", ["netscan1", "netscan2", "portscan", "vulnscan"])
+    @pytest.mark.parametrize(
+        "field", ["netscan1", "netscan2", "portscan", "vulnscan"]
+    )
     def test_positive_value_accepted(self, field):
         """Any positive integer is accepted."""
         cfg = JobSizingConfig(**{field: 1})
@@ -203,13 +211,17 @@ class TestTimeoutsConfigValidator:
         """ssh_connect == ssh_command must raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
             TimeoutsConfig(ssh_connect=60, ssh_command=60)
-        assert "ssh_connect must be less than ssh_command" in str(exc_info.value)
+        assert "ssh_connect must be less than ssh_command" in str(
+            exc_info.value
+        )
 
     def test_connect_greater_than_command_raises(self):
         """ssh_connect > ssh_command must raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
             TimeoutsConfig(ssh_connect=120, ssh_command=60)
-        assert "ssh_connect must be less than ssh_command" in str(exc_info.value)
+        assert "ssh_connect must be less than ssh_command" in str(
+            exc_info.value
+        )
 
     def test_connect_less_than_command_is_valid(self):
         """ssh_connect < ssh_command is valid and must not raise."""
@@ -229,7 +241,7 @@ class TestTimeoutsConfigValidator:
         assert cfg.ssh_connect < cfg.ssh_command
 
     def test_validator_error_message_is_descriptive(self):
-        """ValidationError message identifies the violated constraint."""
+        """Error message identifies the violated constraint."""
         with pytest.raises(ValidationError) as exc_info:
             TimeoutsConfig(ssh_connect=30, ssh_command=30)
         errors = exc_info.value.errors()
@@ -256,7 +268,9 @@ class TestCommanderConfigRequiredFields:
 
     def test_missing_mongodb_uri_raises(self):
         """Omitting mongodb_uri raises ValidationError."""
-        data = {k: v for k, v in _MINIMAL_COMMANDER.items() if k != "mongodb_uri"}
+        data = {
+            k: v for k, v in _MINIMAL_COMMANDER.items() if k != "mongodb_uri"
+        }
         with pytest.raises(ValidationError) as exc_info:
             CommanderConfig(**data)
         assert "mongodb_uri" in str(exc_info.value)
@@ -264,7 +278,9 @@ class TestCommanderConfigRequiredFields:
     def test_missing_mongodb_database_raises(self):
         """Omitting mongodb_database raises ValidationError."""
         data = {
-            k: v for k, v in _MINIMAL_COMMANDER.items() if k != "mongodb_database"
+            k: v
+            for k, v in _MINIMAL_COMMANDER.items()
+            if k != "mongodb_database"
         }
         with pytest.raises(ValidationError) as exc_info:
             CommanderConfig(**data)
@@ -272,14 +288,18 @@ class TestCommanderConfigRequiredFields:
 
     def test_missing_nmap_hosts_raises(self):
         """Omitting nmap_hosts raises ValidationError."""
-        data = {k: v for k, v in _MINIMAL_COMMANDER.items() if k != "nmap_hosts"}
+        data = {
+            k: v for k, v in _MINIMAL_COMMANDER.items() if k != "nmap_hosts"
+        }
         with pytest.raises(ValidationError) as exc_info:
             CommanderConfig(**data)
         assert "nmap_hosts" in str(exc_info.value)
 
     def test_missing_nessus_hosts_raises(self):
         """Omitting nessus_hosts raises ValidationError."""
-        data = {k: v for k, v in _MINIMAL_COMMANDER.items() if k != "nessus_hosts"}
+        data = {
+            k: v for k, v in _MINIMAL_COMMANDER.items() if k != "nessus_hosts"
+        }
         with pytest.raises(ValidationError) as exc_info:
             CommanderConfig(**data)
         assert "nessus_hosts" in str(exc_info.value)
@@ -378,14 +398,17 @@ class TestCommanderConfigDefaults:
         assert cfg.job_sizing.vulnscan == 4
 
     def test_scanner_reliability_default(self):
-        """scanner_reliability defaults to a ScannerReliabilityConfig with standard defaults."""
+        """scanner_reliability defaults to a ScannerReliabilityConfig.
+
+        Uses standard defaults.
+        """
         cfg = CommanderConfig(**_MINIMAL_COMMANDER)
         assert isinstance(cfg.scanner_reliability, ScannerReliabilityConfig)
         assert cfg.scanner_reliability.exceptions_before_cooldown == 2
         assert cfg.scanner_reliability.cooldown_duration_minutes == 30
 
     def test_timeouts_default(self):
-        """timeouts defaults to a TimeoutsConfig with standard defaults."""
+        """Timeouts defaults to a TimeoutsConfig with standard defaults."""
         cfg = CommanderConfig(**_MINIMAL_COMMANDER)
         assert isinstance(cfg.timeouts, TimeoutsConfig)
         assert cfg.timeouts.ssh_connect == 10

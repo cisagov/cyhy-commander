@@ -15,7 +15,6 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address
 
 # Third-party libraries
-import beanie
 import pytest
 from cyhy_db import initialize_db
 from cyhy_db.models import (
@@ -35,7 +34,7 @@ from cyhy_db.models import (
     TicketDoc,
     VulnScanDoc,
 )
-from cyhy_db.models.enum import DayOfWeek, ScanType, Stage, Status
+from cyhy_db.models.enum import ScanType, Stage, Status
 from cyhy_db.models.request_doc import Agency, ScanLimit, Window
 
 import cyhy_commander.db_ops as db_ops
@@ -169,13 +168,16 @@ class TestFetchReadyHostsIntegration:
     """fetch_ready_hosts against a real MongoDB instance."""
 
     def setup_method(self):
+        """Set up clean database state before each test."""
         asyncio.run(_cleanup_test_data())
 
     def test_returns_empty_list_when_no_hosts(self):
         """No READY hosts in DB → empty list returned."""
 
         async def _run():
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert result == []
 
         asyncio.run(_run())
@@ -184,10 +186,14 @@ class TestFetchReadyHostsIntegration:
         """Fetched hosts are atomically marked RUNNING in the real DB."""
 
         async def _run():
-            host = _make_host("10.100.0.1", stage=Stage.NETSCAN1, status=Status.READY)
+            host = _make_host(
+                "10.100.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
             await host.save()
 
-            result = await db_ops.fetch_ready_hosts(count=5, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=5, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert result[0].status == Status.RUNNING
 
@@ -204,11 +210,15 @@ class TestFetchReadyHostsIntegration:
         async def _run():
             for i in range(5):
                 host = _make_host(
-                    f"10.100.1.{i + 1}", stage=Stage.NETSCAN1, status=Status.READY
+                    f"10.100.1.{i + 1}",
+                    stage=Stage.NETSCAN1,
+                    status=Status.READY,
                 )
                 await host.save()
 
-            result = await db_ops.fetch_ready_hosts(count=3, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=3, stage=Stage.NETSCAN1
+            )
             assert len(result) == 3
             for h in result:
                 assert h.status == Status.RUNNING
@@ -228,7 +238,9 @@ class TestFetchReadyHostsIntegration:
             await netscan1.save()
             await portscan.save()
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert str(result[0].ip) == "10.100.2.1"
 
@@ -284,7 +296,9 @@ class TestFetchReadyHostsIntegration:
             for h in [ready, waiting, running]:
                 await h.save()
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert str(result[0].ip) == "10.100.4.1"
 
@@ -300,6 +314,7 @@ class TestBalanceReadyHostsIntegration:
     """balance_ready_hosts against a real MongoDB instance."""
 
     def setup_method(self):
+        """Set up clean database state before each test."""
         asyncio.run(_cleanup_test_data())
 
     def test_moves_waiting_hosts_to_ready_within_open_window(self):
@@ -339,7 +354,9 @@ class TestBalanceReadyHostsIntegration:
             request = _make_request(
                 owner=OWNER,
                 windows=[Window(duration=168)],
-                scan_limits=[ScanLimit(scan_type=ScanType.CYHY, concurrent=limit)],
+                scan_limits=[
+                    ScanLimit(scan_type=ScanType.CYHY, concurrent=limit)
+                ],
             )
             await request.save()
 
@@ -421,7 +438,9 @@ class TestBalanceReadyHostsIntegration:
             request = _make_request(
                 owner=OWNER,
                 windows=[Window(duration=168)],
-                scan_limits=[ScanLimit(scan_type=ScanType.CYHY, concurrent=limit)],
+                scan_limits=[
+                    ScanLimit(scan_type=ScanType.CYHY, concurrent=limit)
+                ],
             )
             await request.save()
 
@@ -464,6 +483,7 @@ class TestCheckHostNextScansIntegration:
     """check_host_next_scans against a real MongoDB instance."""
 
     def setup_method(self):
+        """Set up clean database state before each test."""
         asyncio.run(_cleanup_test_data())
 
     def test_done_host_with_past_next_scan_becomes_waiting(self):
@@ -613,6 +633,7 @@ class TestTransitionHostIntegration:
     """transition_host against a real MongoDB instance."""
 
     def setup_method(self):
+        """Set up clean database state before each test."""
         asyncio.run(_cleanup_test_data())
 
     def test_netscan1_running_up_transitions_to_portscan_waiting(self):
@@ -624,7 +645,9 @@ class TestTransitionHostIntegration:
             )
             await host.save()
 
-            await db_ops.transition_host("10.103.0.1", up=True, reason="syn-ack")
+            await db_ops.transition_host(
+                "10.103.0.1", up=True, reason="syn-ack"
+            )
 
             db_host = await _get_host("10.103.0.1")
             assert db_host.stage == Stage.PORTSCAN
@@ -717,7 +740,9 @@ class TestTransitionHostIntegration:
             )
             await host.save()
 
-            await db_ops.transition_host("10.103.5.1", up=True, reason="syn-ack")
+            await db_ops.transition_host(
+                "10.103.5.1", up=True, reason="syn-ack"
+            )
 
             db_host = await _get_host("10.103.5.1")
             assert db_host.stage == Stage.VULNSCAN
@@ -756,7 +781,9 @@ class TestTransitionHostIntegration:
             )
             await host.save()
 
-            await db_ops.transition_host("10.103.7.1", up=True, reason="syn-ack")
+            await db_ops.transition_host(
+                "10.103.7.1", up=True, reason="syn-ack"
+            )
 
             db_host = await _get_host("10.103.7.1")
             assert db_host.state.up is True
@@ -773,7 +800,9 @@ class TestTransitionHostIntegration:
             )
             await host.save()
 
-            await db_ops.transition_host("10.103.8.1", up=True, reason="syn-ack")
+            await db_ops.transition_host(
+                "10.103.8.1", up=True, reason="syn-ack"
+            )
 
             db_host = await _get_host("10.103.8.1")
             assert Stage.NETSCAN1 in db_host.latest_scan
@@ -814,7 +843,9 @@ class TestTransitionHostIntegration:
             )
             await host.save()
 
-            await db_ops.transition_host("10.103.10.1", up=True, reason="syn-ack")
+            await db_ops.transition_host(
+                "10.103.10.1", up=True, reason="syn-ack"
+            )
 
             tally = await TallyDoc.get(OWNER)
             assert tally is not None

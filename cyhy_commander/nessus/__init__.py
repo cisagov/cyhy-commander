@@ -1,3 +1,5 @@
+"""Nessus importer package."""
+
 __all__ = ["NessusV2ContentHander", "NessusImporter"]
 
 from .nessus_handler import NessusV2ContentHander

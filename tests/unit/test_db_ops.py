@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address
 
 # Third-party libraries
-import pytest
 from cyhy_db.models import HostDoc, SystemControlDoc, TallyDoc
 from cyhy_db.models.enum import ControlAction, ControlTarget, Stage, Status
 
@@ -77,7 +76,9 @@ class TestFetchReadyHosts:
         """No hosts in DB → empty list returned."""
 
         async def _run():
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert result == []
 
         asyncio.run(_run())
@@ -87,10 +88,14 @@ class TestFetchReadyHosts:
 
         async def _run():
             for i in range(5):
-                host = _make_host(f"10.0.0.{i + 1}", stage=Stage.NETSCAN1, status=Status.READY)
+                host = _make_host(
+                    f"10.0.0.{i + 1}", stage=Stage.NETSCAN1, status=Status.READY
+                )
                 await _save_host(host)
 
-            result = await db_ops.fetch_ready_hosts(count=3, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=3, stage=Stage.NETSCAN1
+            )
             assert len(result) == 3
 
         asyncio.run(_run())
@@ -100,10 +105,14 @@ class TestFetchReadyHosts:
 
         async def _run():
             for i in range(2):
-                host = _make_host(f"10.1.0.{i + 1}", stage=Stage.NETSCAN1, status=Status.READY)
+                host = _make_host(
+                    f"10.1.0.{i + 1}", stage=Stage.NETSCAN1, status=Status.READY
+                )
                 await _save_host(host)
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert len(result) == 2
 
         asyncio.run(_run())
@@ -112,10 +121,14 @@ class TestFetchReadyHosts:
         """Fetched hosts have their status set to RUNNING in the DB."""
 
         async def _run():
-            host = _make_host("10.2.0.1", stage=Stage.NETSCAN1, status=Status.READY)
+            host = _make_host(
+                "10.2.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
             await _save_host(host)
 
-            result = await db_ops.fetch_ready_hosts(count=5, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=5, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert result[0].status == Status.RUNNING
 
@@ -129,13 +142,21 @@ class TestFetchReadyHosts:
         """Only READY hosts are fetched; WAITING and RUNNING hosts are ignored."""
 
         async def _run():
-            ready = _make_host("10.3.0.1", stage=Stage.NETSCAN1, status=Status.READY)
-            waiting = _make_host("10.3.0.2", stage=Stage.NETSCAN1, status=Status.WAITING)
-            running = _make_host("10.3.0.3", stage=Stage.NETSCAN1, status=Status.RUNNING)
+            ready = _make_host(
+                "10.3.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
+            waiting = _make_host(
+                "10.3.0.2", stage=Stage.NETSCAN1, status=Status.WAITING
+            )
+            running = _make_host(
+                "10.3.0.3", stage=Stage.NETSCAN1, status=Status.RUNNING
+            )
             for h in [ready, waiting, running]:
                 await _save_host(h)
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert str(result[0].ip) == "10.3.0.1"
 
@@ -145,12 +166,18 @@ class TestFetchReadyHosts:
         """Only hosts in the requested stage are fetched."""
 
         async def _run():
-            netscan1 = _make_host("10.4.0.1", stage=Stage.NETSCAN1, status=Status.READY)
-            portscan = _make_host("10.4.0.2", stage=Stage.PORTSCAN, status=Status.READY)
+            netscan1 = _make_host(
+                "10.4.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
+            portscan = _make_host(
+                "10.4.0.2", stage=Stage.PORTSCAN, status=Status.READY
+            )
             for h in [netscan1, portscan]:
                 await _save_host(h)
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1
+            )
             assert len(result) == 1
             assert str(result[0].ip) == "10.4.0.1"
 
@@ -160,12 +187,24 @@ class TestFetchReadyHosts:
         """When owner is specified, only hosts for that owner are returned."""
 
         async def _run():
-            org_a = _make_host("10.5.0.1", stage=Stage.NETSCAN1, status=Status.READY, owner="ORG_A")
-            org_b = _make_host("10.5.0.2", stage=Stage.NETSCAN1, status=Status.READY, owner="ORG_B")
+            org_a = _make_host(
+                "10.5.0.1",
+                stage=Stage.NETSCAN1,
+                status=Status.READY,
+                owner="ORG_A",
+            )
+            org_b = _make_host(
+                "10.5.0.2",
+                stage=Stage.NETSCAN1,
+                status=Status.READY,
+                owner="ORG_B",
+            )
             for h in [org_a, org_b]:
                 await _save_host(h)
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1, owner="ORG_A")
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1, owner="ORG_A"
+            )
             assert len(result) == 1
             assert result[0].owner == "ORG_A"
 
@@ -175,12 +214,24 @@ class TestFetchReadyHosts:
         """When owner is None, hosts from all owners are returned."""
 
         async def _run():
-            org_a = _make_host("10.6.0.1", stage=Stage.NETSCAN1, status=Status.READY, owner="ORG_A")
-            org_b = _make_host("10.6.0.2", stage=Stage.NETSCAN1, status=Status.READY, owner="ORG_B")
+            org_a = _make_host(
+                "10.6.0.1",
+                stage=Stage.NETSCAN1,
+                status=Status.READY,
+                owner="ORG_A",
+            )
+            org_b = _make_host(
+                "10.6.0.2",
+                stage=Stage.NETSCAN1,
+                status=Status.READY,
+                owner="ORG_B",
+            )
             for h in [org_a, org_b]:
                 await _save_host(h)
 
-            result = await db_ops.fetch_ready_hosts(count=10, stage=Stage.NETSCAN1, owner=None)
+            result = await db_ops.fetch_ready_hosts(
+                count=10, stage=Stage.NETSCAN1, owner=None
+            )
             assert len(result) == 2
 
         asyncio.run(_run())
@@ -189,10 +240,14 @@ class TestFetchReadyHosts:
         """The returned HostDoc objects reflect the RUNNING status in memory."""
 
         async def _run():
-            host = _make_host("10.7.0.1", stage=Stage.PORTSCAN, status=Status.READY)
+            host = _make_host(
+                "10.7.0.1", stage=Stage.PORTSCAN, status=Status.READY
+            )
             await _save_host(host)
 
-            result = await db_ops.fetch_ready_hosts(count=5, stage=Stage.PORTSCAN)
+            result = await db_ops.fetch_ready_hosts(
+                count=5, stage=Stage.PORTSCAN
+            )
             for h in result:
                 assert h.status == Status.RUNNING
 
@@ -202,8 +257,12 @@ class TestFetchReadyHosts:
         """Fetching for one stage does not affect hosts in other stages."""
 
         async def _run():
-            netscan1 = _make_host("10.8.0.1", stage=Stage.NETSCAN1, status=Status.READY)
-            vulnscan = _make_host("10.8.0.2", stage=Stage.VULNSCAN, status=Status.READY)
+            netscan1 = _make_host(
+                "10.8.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
+            vulnscan = _make_host(
+                "10.8.0.2", stage=Stage.VULNSCAN, status=Status.READY
+            )
             for h in [netscan1, vulnscan]:
                 await _save_host(h)
 
@@ -224,11 +283,15 @@ class TestFetchReadyHosts:
         """
 
         async def _run():
-            host = _make_host("10.9.0.1", stage=Stage.NETSCAN1, status=Status.READY)
+            host = _make_host(
+                "10.9.0.1", stage=Stage.NETSCAN1, status=Status.READY
+            )
             await _save_host(host)
 
             # limit(0) in MongoDB means no limit — all matching hosts are returned
-            result = await db_ops.fetch_ready_hosts(count=0, stage=Stage.NETSCAN1)
+            result = await db_ops.fetch_ready_hosts(
+                count=0, stage=Stage.NETSCAN1
+            )
             # The function returns whatever MongoDB returns for limit(0)
             assert isinstance(result, list)
 
@@ -247,7 +310,9 @@ class TestCheckHostNextScans:
         """No DONE hosts → no changes."""
 
         async def _run():
-            host = _make_host("10.10.0.1", stage=Stage.NETSCAN1, status=Status.WAITING)
+            host = _make_host(
+                "10.10.0.1", stage=Stage.NETSCAN1, status=Status.WAITING
+            )
             await _save_host(host)
 
             await db_ops.check_host_next_scans()
@@ -444,7 +509,9 @@ class TestTransitionHost:
         """NETSCAN1/RUNNING + up=True → PORTSCAN/WAITING."""
 
         async def _run():
-            host = _make_host("10.20.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING)
+            host = _make_host(
+                "10.20.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host("10.20.0.1", up=True, reason="syn-ack")
@@ -455,14 +522,20 @@ class TestTransitionHost:
 
         asyncio.run(_run())
 
-    def test_netscan1_running_down_transitions_to_netscan2_waiting(self, mock_db):
+    def test_netscan1_running_down_transitions_to_netscan2_waiting(
+        self, mock_db
+    ):
         """NETSCAN1/RUNNING + up=False → NETSCAN2/WAITING."""
 
         async def _run():
-            host = _make_host("10.21.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING)
+            host = _make_host(
+                "10.21.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING
+            )
             await _save_host(host)
 
-            await db_ops.transition_host("10.21.0.1", up=False, reason="no-response")
+            await db_ops.transition_host(
+                "10.21.0.1", up=False, reason="no-response"
+            )
 
             db_host = await _get_host("10.21.0.1")
             assert db_host.stage == Stage.NETSCAN2
@@ -474,7 +547,9 @@ class TestTransitionHost:
         """NETSCAN2/RUNNING + up=True → PORTSCAN/WAITING."""
 
         async def _run():
-            host = _make_host("10.22.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING)
+            host = _make_host(
+                "10.22.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host("10.22.0.1", up=True, reason="syn-ack")
@@ -489,10 +564,14 @@ class TestTransitionHost:
         """NETSCAN2/RUNNING + up=False → NETSCAN2/DONE (host confirmed down)."""
 
         async def _run():
-            host = _make_host("10.23.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING)
+            host = _make_host(
+                "10.23.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING
+            )
             await _save_host(host)
 
-            await db_ops.transition_host("10.23.0.1", up=False, reason="no-response")
+            await db_ops.transition_host(
+                "10.23.0.1", up=False, reason="no-response"
+            )
 
             db_host = await _get_host("10.23.0.1")
             assert db_host.stage == Stage.NETSCAN2
@@ -500,11 +579,15 @@ class TestTransitionHost:
 
         asyncio.run(_run())
 
-    def test_portscan_running_with_open_ports_transitions_to_vulnscan(self, mock_db):
+    def test_portscan_running_with_open_ports_transitions_to_vulnscan(
+        self, mock_db
+    ):
         """PORTSCAN/RUNNING + has_open_ports=True → VULNSCAN/WAITING."""
 
         async def _run():
-            host = _make_host("10.24.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING)
+            host = _make_host(
+                "10.24.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host(
@@ -521,7 +604,9 @@ class TestTransitionHost:
         """PORTSCAN/RUNNING + has_open_ports=False → PORTSCAN/DONE."""
 
         async def _run():
-            host = _make_host("10.25.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING)
+            host = _make_host(
+                "10.25.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host(
@@ -538,7 +623,9 @@ class TestTransitionHost:
         """VULNSCAN/RUNNING → VULNSCAN/DONE."""
 
         async def _run():
-            host = _make_host("10.26.0.1", stage=Stage.VULNSCAN, status=Status.RUNNING)
+            host = _make_host(
+                "10.26.0.1", stage=Stage.VULNSCAN, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host("10.26.0.1", up=True, reason="syn-ack")
@@ -553,7 +640,9 @@ class TestTransitionHost:
         """was_failure=True reverts any RUNNING host to WAITING in the same stage."""
 
         async def _run():
-            host = _make_host("10.27.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING)
+            host = _make_host(
+                "10.27.0.1", stage=Stage.PORTSCAN, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host(
@@ -570,7 +659,12 @@ class TestTransitionHost:
         """transition_host updates host.state.up and host.state.reason."""
 
         async def _run():
-            host = _make_host("10.28.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING, up=False)
+            host = _make_host(
+                "10.28.0.1",
+                stage=Stage.NETSCAN1,
+                status=Status.RUNNING,
+                up=False,
+            )
             await _save_host(host)
 
             await db_ops.transition_host("10.28.0.1", up=True, reason="syn-ack")
@@ -585,14 +679,17 @@ class TestTransitionHost:
         """transition_host records a latest_scan timestamp for the finished stage."""
 
         async def _run():
-            host = _make_host("10.29.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING)
+            host = _make_host(
+                "10.29.0.1", stage=Stage.NETSCAN1, status=Status.RUNNING
+            )
             await _save_host(host)
 
             await db_ops.transition_host("10.29.0.1", up=True, reason="syn-ack")
 
             db_host = await _get_host("10.29.0.1")
             assert Stage.NETSCAN1 in db_host.latest_scan
-            # Timestamp is set (mongomock may strip tzinfo, so just check it's a datetime)
+            # Timestamp is set (mongomock may strip tzinfo,
+            # so just check it's a datetime)
             ts = db_host.latest_scan[Stage.NETSCAN1]
             assert isinstance(ts, datetime)
 
@@ -602,10 +699,14 @@ class TestTransitionHost:
         """When a host reaches DONE, next_scan is set by the scheduler."""
 
         async def _run():
-            host = _make_host("10.30.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING)
+            host = _make_host(
+                "10.30.0.1", stage=Stage.NETSCAN2, status=Status.RUNNING
+            )
             await _save_host(host)
 
-            await db_ops.transition_host("10.30.0.1", up=False, reason="no-response")
+            await db_ops.transition_host(
+                "10.30.0.1", up=False, reason="no-response"
+            )
 
             db_host = await _get_host("10.30.0.1")
             assert db_host.status == Status.DONE
@@ -647,9 +748,10 @@ class TestTransitionHost:
         """DONE/DONE host is a terminal state — transition_host makes no changes."""
 
         async def _run():
-            host = _make_host("10.32.0.1", stage=Stage.VULNSCAN, status=Status.DONE)
+            host = _make_host(
+                "10.32.0.1", stage=Stage.VULNSCAN, status=Status.DONE
+            )
             await _save_host(host)
-            original_next_scan = host.next_scan
 
             await db_ops.transition_host("10.32.0.1", up=True, reason="syn-ack")
 
@@ -719,7 +821,9 @@ class TestShouldCommanderPause:
             # value, test with it. Otherwise skip this scenario.
             from cyhy_db.models.enum import ControlTarget as CT
 
-            non_commander_targets = [t for t in CT if t != ControlTarget.COMMANDER]
+            non_commander_targets = [
+                t for t in CT if t != ControlTarget.COMMANDER
+            ]
             if not non_commander_targets:
                 # Only one target value exists; skip this test scenario
                 return

@@ -20,6 +20,7 @@ import netaddr
 # cyhy-db models and enums
 from cyhy_db.models import HostDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 # Local modules
 from .. import db_ops
@@ -27,7 +28,6 @@ from ..ticket_manager import VulnTicketManager
 
 # Local nessus handler
 from .nessus_handler import NessusV2ContentHander
-from cyhy_logging import CYHY_ROOT_LOGGER
 
 UNKNOWN_OWNER = "UNKNOWN"
 
@@ -63,6 +63,8 @@ def _range_string_to_list(port_range_string: str) -> list[int]:
 
 
 class NessusImporter:
+    """Parses Nessus XML output and stores results in the database."""
+
     SOURCE = "nessus"
 
     def __init__(self, manual_scan: bool = False):
@@ -72,7 +74,9 @@ class NessusImporter:
             manual_scan: When set to True, hosts will not be transitioned
                 to the next stage/status, and scan times are assumed to be now.
         """
-        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.nessus_importer")
+        self.__logger = logging.getLogger(
+            CYHY_ROOT_LOGGER + ".commander.nessus_importer"
+        )
         self.__ticket_manager = VulnTicketManager()
         self.manual_scan = manual_scan
 
@@ -127,9 +131,7 @@ class NessusImporter:
             # Match the base policy value found in /extras/policy.xml
             port_range_string = "1-65535"
         ports = set(_range_string_to_list(port_range_string))
-        self.__logger.debug(
-            "Found %d ports in Nessus file", len(ports)
-        )
+        self.__logger.debug("Found %d ports in Nessus file", len(ports))
 
     def _host_callback(self, parsedHost: dict) -> None:
         """SAX callback: collect parsed host metadata and set current IP context."""

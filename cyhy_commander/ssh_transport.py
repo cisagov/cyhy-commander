@@ -1,13 +1,17 @@
+"""SSH and rsync transport utilities for scanner host communication."""
+
 import os
 import shlex
 import subprocess
-from dataclasses import dataclass
-from typing import Any, Optional
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
 class SSHTransportConfig:
+    """Configuration parameters for SSH and rsync connections."""
+
     connect_timeout_seconds: int = 10
     command_timeout_seconds: int = 60
     server_alive_interval_seconds: int = 30
@@ -18,12 +22,16 @@ class SSHTransportConfig:
 
 
 class SSHTransport:
+    """Executes remote commands and transfers files over SSH/rsync."""
+
     def __init__(self, logger: Any, config: SSHTransportConfig | None = None):
+        """Initialize the transport with a logger and optional config."""
         self._logger = logger
         self._cfg = config or SSHTransportConfig()
 
     def _ssh_base(self, host: str) -> list[str]:
-        # Uses user SSH config by default (same intent as Fabric's env.use_ssh_config=True)
+        # Uses user SSH config by default
+        # (same intent as Fabric's env.use_ssh_config=True)
         return [
             "ssh",
             "-o",
@@ -76,7 +84,12 @@ class SSHTransport:
         remote_command: str,
         timeout_seconds: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        timeout = timeout_seconds if timeout_seconds is not None else self._cfg.command_timeout_seconds
+        """Run a remote command on host via SSH and return the result."""
+        timeout = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else self._cfg.command_timeout_seconds
+        )
         argv = self._ssh_base(host) + [remote_command]
         self._logger.debug("SSH run: %s", shlex.join(argv))
         return subprocess.run(

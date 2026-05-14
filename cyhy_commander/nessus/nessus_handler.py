@@ -1,7 +1,8 @@
-from xml.sax import ContentHandler, parse, SAXNotRecognizedException
-from xml.parsers.expat import ExpatError
-import gzip
+"""SAX content handler for parsing Nessus v2 XML output."""
+
 from datetime import datetime
+from xml.sax import ContentHandler, SAXNotRecognizedException
+
 from dateutil import tz
 
 PROPS_DATE_FORMAT = "%a %b %d %H:%M:%S %Y"
@@ -14,7 +15,10 @@ BANNED_PLUGIN_IDS = [
 
 
 class NessusV2ContentHander(ContentHandler):
-    # TODO: too many params, make an interface or default implementation to extend for callers
+    """SAX handler that parses a Nessus v2 XML report into structured callbacks."""
+
+    # TODO: too many params, make an interface or default implementation
+    # to extend for callers
     def __init__(
         self,
         host_callback,
@@ -24,6 +28,7 @@ class NessusV2ContentHander(ContentHandler):
         port_range_callback,
         end_callback,
     ):
+        """Initialize the handler with the provided callback functions."""
         ContentHandler.__init__(self)
         self.host_callback = host_callback
         self.report_callback = report_callback
@@ -39,18 +44,22 @@ class NessusV2ContentHander(ContentHandler):
         self.last_pref_name = None
 
     def push_mode(self, name, attrs):
+        """Push a new parsing mode onto the mode stack."""
         self.modeStack.append((name, attrs))
 
     def pop_mode(self):
+        """Pop and return the current parsing mode from the stack."""
         return self.modeStack.pop()
 
     def get_mode(self):
+        """Return the current parsing mode name, or None if the stack is empty."""
         if len(self.modeStack):
             return self.modeStack[-1][0]
         else:
             return None
 
     def startElement(self, name, attrs):
+        """Handle the opening of an XML element."""
         # clear characters buffer
         self.chars = ""
         if len(self.modeStack) == 0:
@@ -82,7 +91,9 @@ class NessusV2ContentHander(ContentHandler):
             elif mode == "Report":
                 if name == "ReportHost":
                     self.push_mode(name, attrs)
-                    self.host = {"name": attrs["name"]}  # TODO get a NessusHostDoc here
+                    self.host = {
+                        "name": attrs["name"]
+                    }  # TODO get a NessusHostDoc here
             elif mode == "ReportHost":
                 if name == "HostProperties":
                     self.push_mode(name, attrs)
@@ -105,8 +116,9 @@ class NessusV2ContentHander(ContentHandler):
                 self.push_mode(name, attrs)
 
     def endElement(self, name):
+        """Handle the closing of an XML element."""
         if name == self.get_mode():
-            (skip, attrs) = self.pop_mode()
+            skip, attrs = self.pop_mode()
         else:
             return
         mode = self.get_mode()
@@ -116,23 +128,25 @@ class NessusV2ContentHander(ContentHandler):
             tagValue = self.chars
             if tagName == "HOST_START":
                 tagName = "start_time"
-                tagValue = datetime.strptime(tagValue, PROPS_DATE_FORMAT).replace(
+                tagValue = datetime.strptime(
+                    tagValue, PROPS_DATE_FORMAT
+                ).replace(
                     tzinfo=tz.tzutc()
                 )  # All times/dates assumed to be UTC
             elif tagName == "HOST_END":
                 tagName = "end_time"
-                tagValue = datetime.strptime(tagValue, PROPS_DATE_FORMAT).replace(
-                    tzinfo=tz.tzutc()
-                )
+                tagValue = datetime.strptime(
+                    tagValue, PROPS_DATE_FORMAT
+                ).replace(tzinfo=tz.tzutc())
             else:
                 tagName = tagName.replace("-", "_")
             self.host[tagName] = tagValue
         elif mode == "ReportItem":
             tagValue = self.chars
             if name.endswith("date"):
-                tagValue = datetime.strptime(tagValue, REPORT_DATE_FORMAT).replace(
-                    tzinfo=tz.tzutc()
-                )
+                tagValue = datetime.strptime(
+                    tagValue, REPORT_DATE_FORMAT
+                ).replace(tzinfo=tz.tzutc())
             elif name.endswith("score"):
                 tagValue = float(tagValue)
             self.report[name] = tagValue
@@ -165,4 +179,5 @@ class NessusV2ContentHander(ContentHandler):
             self.end_callback()
 
     def characters(self, content):
+        """Accumulate character data between XML tags."""
         self.chars += content

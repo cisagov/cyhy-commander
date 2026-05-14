@@ -19,6 +19,7 @@ import netaddr
 # cyhy-db models and enums
 from cyhy_db.models import HostDoc, HostScanDoc, PortScanDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol, Stage
+from cyhy_logging import CYHY_ROOT_LOGGER
 
 # Local modules
 from .. import db_ops
@@ -26,7 +27,6 @@ from ..ticket_manager import IPPortTicketManager, IPTicketManager
 
 # Local nmap handler
 from .nmap_handler import NmapContentHandler
-from cyhy_logging import CYHY_ROOT_LOGGER
 
 UNKNOWN_OWNER = "UNKNOWN"
 DEFAULT_OWNER = "FEDERAL"
@@ -62,10 +62,15 @@ RISKY_SERVICES = [
 
 
 class NmapImporter:
+    """Parses nmap XML output and stores results in the database."""
+
     SOURCE = "nmap"
 
     def __init__(self, stage=Stage.PORTSCAN):
-        self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander.nmap_importer")
+        """Initialize the importer for the given scan stage."""
+        self.__logger = logging.getLogger(
+            CYHY_ROOT_LOGGER + ".commander.nmap_importer"
+        )
         if stage in (Stage.NETSCAN1, Stage.NETSCAN2):
             self.__ticket_manager = IPTicketManager()
         elif stage == Stage.PORTSCAN:

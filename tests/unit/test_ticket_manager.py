@@ -12,9 +12,14 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address
 
 # Third-party libraries
-import pytest
 from bson import ObjectId
-from cyhy_db.models import KEVDoc, NotificationDoc, PortScanDoc, TicketDoc, VulnScanDoc
+from cyhy_db.models import (
+    KEVDoc,
+    NotificationDoc,
+    PortScanDoc,
+    TicketDoc,
+    VulnScanDoc,
+)
 from cyhy_db.models.enum import Protocol, TicketAction
 
 from cyhy_commander.ticket_manager import (
@@ -105,7 +110,7 @@ async def _all_tickets():
 async def _open_tickets(ip=IP):
     return await TicketDoc.find(
         TicketDoc.ip == IPv4Address(ip),
-        TicketDoc.open == True,
+        TicketDoc.open is True,
     ).to_list()
 
 
@@ -222,7 +227,9 @@ class TestVulnTicketManagerOpen:
             kev = KEVDoc(id="CVE-2021-44228", known_ransomware=True)
             await kev.save()
             # Vuln with low severity but CVE in plugin_name
-            vuln = _make_vuln(severity=1, plugin_name="CVE-2021-44228 Apache Log4j")
+            vuln = _make_vuln(
+                severity=1, plugin_name="CVE-2021-44228 Apache Log4j"
+            )
             await _save_vuln(vuln)
             mgr = VulnTicketManager()
             await mgr.process_tickets(IP, [vuln])
@@ -390,7 +397,10 @@ class TestVulnTicketManagerReopen:
         return ticket
 
     def test_reopen_within_window(self, mock_db):
-        """Re-detected vuln + closed ticket within 90 days → REOPENED event, open=True."""
+        """Re-detected vuln + closed ticket within 90 days → REOPENED event.
+
+        Ticket open=True after reopen.
+        """
 
         async def _run():
             vuln = _make_vuln()
@@ -483,7 +493,10 @@ class TestVulnTicketManagerClose:
     """VulnTicketManager closes open tickets for vulns no longer detected."""
 
     def test_close_undetected_vuln(self, mock_db):
-        """Not-detected vuln + open ticket + false_positive=False → CLOSED event, open=False."""
+        """Not-detected vuln + open ticket + false_positive=False → CLOSED event.
+
+        Ticket open=False after close.
+        """
 
         async def _run():
             vuln = _make_vuln()
@@ -506,7 +519,10 @@ class TestVulnTicketManagerClose:
         asyncio.run(_run())
 
     def test_close_false_positive_adds_unverified_not_closed(self, mock_db):
-        """Not-detected vuln + open ticket + false_positive=True → UNVERIFIED event, ticket stays open."""
+        """Not-detected vuln + open ticket + false_positive=True → UNVERIFIED event.
+
+        Ticket stays open.
+        """
 
         async def _run():
             vuln = _make_vuln()
@@ -568,7 +584,10 @@ class TestVulnTicketManagerFalsePositive:
     """VulnTicketManager handles false-positive tickets correctly."""
 
     def test_false_positive_not_closed_when_vuln_not_detected(self, mock_db):
-        """False-positive ticket not closed when vuln not detected (UNVERIFIED event added)."""
+        """False-positive ticket not closed when vuln not detected.
+
+        UNVERIFIED event added instead.
+        """
 
         async def _run():
             vuln = _make_vuln()
@@ -590,7 +609,10 @@ class TestVulnTicketManagerFalsePositive:
         asyncio.run(_run())
 
     def test_false_positive_expiration_flips_flag_and_closes(self, mock_db):
-        """Expired false_positive_expiration_date → flip false_positive=False, CHANGED event, then close."""
+        """Expired false_positive_expiration_date → flip false_positive=False.
+
+        CHANGED event added, then ticket closed.
+        """
 
         async def _run():
             vuln = _make_vuln()
@@ -700,7 +722,10 @@ class TestIPPortTicketManagerPartialScan:
     """IPPortTicketManager handles partial-scan close logic."""
 
     def test_partial_scan_absent_port_not_closed(self, mock_db):
-        """Port absent from partial scan → ticket NOT closed (partial scan cannot close tickets)."""
+        """Port absent from partial scan → ticket NOT closed.
+
+        Partial scan cannot close tickets.
+        """
 
         async def _run():
             port_scan = _make_port_scan(port=80)
@@ -811,8 +836,13 @@ class TestIPTicketManager:
 
         asyncio.run(_run())
 
-    def test_false_positive_host_ticket_not_closed_when_host_down(self, mock_db):
-        """False-positive host ticket not closed when host is down (UNVERIFIED event)."""
+    def test_false_positive_host_ticket_not_closed_when_host_down(
+        self, mock_db
+    ):
+        """False-positive host ticket not closed when host is down.
+
+        UNVERIFIED event added instead.
+        """
 
         async def _run():
             ticket = self._make_host_ticket(false_positive=True)

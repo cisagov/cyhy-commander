@@ -35,10 +35,10 @@ _HOURS_ANCHORS = np.array(
     [
         90 * 24,  # 90 days  → 2160 hours
         14 * 24,  # 14 days  → 336 hours
-        7 * 24,   # 7 days   → 168 hours
-        4 * 24,   # 4 days   → 96 hours
-        24,       # 24 hours
-        12,       # 12 hours
+        7 * 24,  # 7 days   → 168 hours
+        4 * 24,  # 4 days   → 96 hours
+        24,  # 24 hours
+        12,  # 12 hours
     ],
     dtype=float,
 )
@@ -46,8 +46,8 @@ _HOURS_ANCHORS = np.array(
 # numpy.interp requires the x-coordinates to be increasing, but our priority
 # anchors decrease from 1 to -16.  We flip both arrays so that x is
 # monotonically increasing (from -16 to 1) and y follows accordingly.
-_INTERP_X = _PRIORITY_ANCHORS[::-1]   # [-16, -8, -4, -1, 0, 1]
-_INTERP_Y = _HOURS_ANCHORS[::-1]      # [12, 24, 96, 168, 336, 2160]
+_INTERP_X = _PRIORITY_ANCHORS[::-1]  # [-16, -8, -4, -1, 0, 1]
+_INTERP_Y = _HOURS_ANCHORS[::-1]  # [12, 24, 96, 168, 336, 2160]
 
 
 class DefaultScheduler:
@@ -91,9 +91,9 @@ class DefaultScheduler:
         """
         priority = await _calculate_priority(host)
         host.priority = priority
-        host.next_scan = datetime.now(timezone.utc) + self.timedelta_for_priority(
-            priority
-        )
+        host.next_scan = datetime.now(
+            timezone.utc
+        ) + self.timedelta_for_priority(priority)
         logger.debug(
             "Scheduled host %s: priority=%d, next_scan=%s",
             host.ip,
@@ -124,10 +124,15 @@ async def _calculate_priority(host: HostDoc) -> int:
 
     # Check max severity across all latest vuln scans for this host.
     # Use sort+limit instead of aggregation for mongomock compatibility.
-    top_vuln = await VulnScanDoc.find(
-        VulnScanDoc.ip == host.ip,
-        VulnScanDoc.latest == True,  # noqa: E712
-    ).sort([("severity", -1)]).limit(1).first_or_none()
+    top_vuln = (
+        await VulnScanDoc.find(
+            VulnScanDoc.ip == host.ip,
+            VulnScanDoc.latest == True,  # noqa: E712
+        )
+        .sort([("severity", -1)])
+        .limit(1)
+        .first_or_none()
+    )
 
     max_severity = top_vuln.severity if top_vuln is not None else 0
 

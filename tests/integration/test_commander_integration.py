@@ -37,9 +37,6 @@ if "cyhy_config" not in sys.modules:
     _mock_cyhy_config.get_config = lambda **kwargs: None  # type: ignore[attr-defined]
     sys.modules["cyhy_config"] = _mock_cyhy_config
 
-# Now we can import commander modules
-from cyhy_commander.commander import Commander  # noqa: E402
-from cyhy_commander.config_model import CommanderConfig  # noqa: E402
 from cyhy_db.models import (  # noqa: E402
     CVEDoc,
     HostDoc,
@@ -57,6 +54,10 @@ from cyhy_db.models import (  # noqa: E402
     TicketDoc,
     VulnScanDoc,
 )
+
+# Now we can import commander modules
+from cyhy_commander.commander import Commander  # noqa: E402
+from cyhy_commander.config_model import CommanderConfig  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -136,7 +137,9 @@ def _make_mock_ssh() -> MagicMock:
     return mock
 
 
-def _make_commander_with_mock_ssh(config: CommanderConfig, tmp_path: Path) -> tuple:
+def _make_commander_with_mock_ssh(
+    config: CommanderConfig, tmp_path: Path
+) -> tuple:
     """Create a Commander instance with a mock SSH transport.
 
     Returns (commander, mock_ssh).  The caller must be inside a patched
@@ -202,7 +205,11 @@ class _CommanderContext:
         p_check = patch(
             "cyhy_commander.commander.db_ops.check_host_next_scans",
             new_callable=AsyncMock,
-            **({"side_effect": self._check_side_effect} if self._check_side_effect else {}),
+            **(
+                {"side_effect": self._check_side_effect}
+                if self._check_side_effect
+                else {}
+            ),
         )
         p_balance = patch(
             "cyhy_commander.commander.db_ops.balance_ready_hosts",
@@ -257,7 +264,9 @@ def mock_db_for_commander():
     db = client["test_commander_db"]
 
     async def _init():
-        await beanie.init_beanie(database=db, document_models=_ALL_DOCUMENT_MODELS)
+        await beanie.init_beanie(
+            database=db, document_models=_ALL_DOCUMENT_MODELS
+        )
 
     asyncio.run(_init())
     yield db
@@ -274,7 +283,9 @@ class TestHandleTerm:
     Validates: MR-7.1, AC-4.5
     """
 
-    def test_handle_term_sets_is_running_false(self, mock_db_for_commander, tmp_path):
+    def test_handle_term_sets_is_running_false(
+        self, mock_db_for_commander, tmp_path
+    ):
         """handle_term() sets the internal _is_running flag to False.
 
         This is the mechanism that causes Commander.run() to exit after the
@@ -354,7 +365,9 @@ class TestRunGracefulShutdown:
 
         async def _run():
             with _CommanderContext(
-                config, tmp_path, check_host_next_scans_side_effect=_counting_check
+                config,
+                tmp_path,
+                check_host_next_scans_side_effect=_counting_check,
             ) as ctx:
                 commander = ctx.commander
 
@@ -369,7 +382,9 @@ class TestRunGracefulShutdown:
                 await shutdown_task
 
         asyncio.run(_run())
-        assert cycle_count["n"] >= 1, "Expected at least one work cycle to complete"
+        assert (
+            cycle_count["n"] >= 1
+        ), "Expected at least one work cycle to complete"
 
 
 # ---------------------------------------------------------------------------
@@ -469,9 +484,9 @@ class TestFullWorkCycleWithMockSSH:
         asyncio.run(_run())
 
         # rsync_pull_dir should have been called to retrieve the done job
-        assert mock_ssh.rsync_pull_dir.call_count >= 1, (
-            "Expected rsync_pull_dir to be called for the done job"
-        )
+        assert (
+            mock_ssh.rsync_pull_dir.call_count >= 1
+        ), "Expected rsync_pull_dir to be called for the done job"
 
     def test_work_cycle_handles_ssh_failure_gracefully(
         self, mock_db_for_commander, tmp_path
@@ -588,9 +603,9 @@ class TestStopFileShutdown:
         asyncio.run(_run())
 
         # After shutdown, the stop file should have been removed
-        assert not (tmp_path / "stop").exists(), (
-            "Stop file should be removed after shutdown"
-        )
+        assert not (
+            tmp_path / "stop"
+        ).exists(), "Stop file should be removed after shutdown"
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +619,9 @@ class TestSIGTERMIntegration:
     Validates: MR-7.1, FR-7.2, AC-4.2, AC-4.5
     """
 
-    def test_sigterm_triggers_handle_term(self, mock_db_for_commander, tmp_path):
+    def test_sigterm_triggers_handle_term(
+        self, mock_db_for_commander, tmp_path
+    ):
         """Sending SIGTERM to the process calls handle_term() and stops run().
 
         This test registers the signal handler on the running event loop

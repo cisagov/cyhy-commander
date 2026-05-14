@@ -7,10 +7,8 @@ Feeds scanners jobs, processes output, and stores results in database.
 
 import argparse
 import asyncio
-from collections import defaultdict
 import logging
 import os
-from pathlib import Path, PurePosixPath
 import random
 import shlex
 import shutil
@@ -18,22 +16,22 @@ import signal
 import sys
 import time
 import traceback
+from collections import defaultdict
+from pathlib import Path, PurePosixPath
 
 import cyhy_db
 from cyhy_config import get_config
-from cyhy_db.models.enum import ScanType, Stage
+from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER, setup_logging
 
+from . import db_ops, ssh_transport
 from .config_model import CommanderConfig
-from . import db_ops
+from .job_sink import NessusSink, NmapSink, NoOpSink, TryAgainSink
+from .job_source import DatabaseJobSource, DirectoryJobSource
 
 # Default owner constant — "ownerless" hosts belong to this org.
 # Sourced from db_ops to keep a single definition.
 DEFAULT_OWNER = db_ops.DEFAULT_OWNER
-
-from .job_sink import NmapSink, NessusSink, TryAgainSink, NoOpSink
-from .job_source import DirectoryJobSource, DatabaseJobSource
-from . import ssh_transport
 
 # remote files
 DONE_DIR = "runner/done"
@@ -66,7 +64,10 @@ NMAP_WORKGROUP = "nmap"
 
 
 class Commander:
+    """Orchestrates scan jobs across scanner hosts."""
+
     def __init__(self, config: CommanderConfig):
+        """Initialize the Commander with the given configuration."""
         # Set up logging first in order to log any errors as soon as possible.
         self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander")
 
@@ -99,7 +100,6 @@ class Commander:
             if not path.exists():
                 self.__logger.info('Creating directory "%s".' % (directory))
                 path.mkdir(parents=True)
-
 
     def __setup_sources(self):
         if self.__test_mode:
@@ -207,7 +207,9 @@ class Commander:
                 cp_done = await asyncio.to_thread(
                     self.__ssh.run,
                     host,
-                    "test -f {p} && cat {p} || true".format(p=shlex.quote(done_path)),
+                    "test -f {p} && cat {p} || true".format(
+                        p=shlex.quote(done_path)
+                    ),
                 )
                 exit_code = (cp_done.stdout or "").strip()
                 # Derive the stage from the job name prefix (e.g. "NETSCAN1-…")
@@ -282,7 +284,9 @@ class Commander:
                     self.__failed_job_queue.put_nowait(local_job_dir)
 
         except Exception as e:
-            self.__logger.error("Exception when retrieving done jobs from %s", host)
+            self.__logger.error(
+                "Exception when retrieving done jobs from %s", host
+            )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
 
@@ -302,7 +306,9 @@ class Commander:
             running_jobs = (cp.stdout or "").split()
             return len(running_jobs)
         except Exception as e:
-            self.__logger.error("Exception when retrieving running job count from %s", host)
+            self.__logger.error(
+                "Exception when retrieving running job count from %s", host
+            )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
             return None
@@ -347,7 +353,9 @@ class Commander:
             self.__move_to_pushed(job_path)
 
         except Exception as e:
-            self.__logger.error("Exception when pushing %s to host %s", job_path, host)
+            self.__logger.error(
+                "Exception when pushing %s to host %s", job_path, host
+            )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
 
@@ -357,7 +365,6 @@ class Commander:
             return str(p)
         new_name = "%s.%d" % (p.name, int(time.time() * 1000000))
         return str(p.with_name(new_name))
-
 
     def __move_to_pushed(self, job_path):
         if not self.__test_mode:
@@ -372,8 +379,10 @@ class Commander:
     def __lowest_host(self, counts):
         lowest_count = None
         lowest_host = None
-        for (host, count) in counts.items():
-            if count != None and (lowest_count == None or count < lowest_count):
+        for host, count in counts.items():
+            if count is not None and (
+                lowest_count is None or count < lowest_count
+            ):
                 lowest_host = host
                 lowest_count = count
         return lowest_host
@@ -385,22 +394,25 @@ class Commander:
         for source in sources:
             self.__logger.debug("Checking %s for a job." % source)
             job = source.get_job()
-            if job != None:
+            if job is not None:
                 self.__logger.info("Acquired a job from %s" % source)
                 break
             self.__logger.debug("No available jobs returned by %s" % source)
         return job
 
-    async def __fill_hosts(self, counts, sources, workgroup_name, jobs_per_host):
+    async def __fill_hosts(
+        self, counts, sources, workgroup_name, jobs_per_host
+    ):
         while True:
             lowest_host = self.__lowest_host(counts)
             if counts[lowest_host] >= jobs_per_host:
                 self.__logger.debug("All %s hosts are full" % workgroup_name)
                 break  # everyone is full
             job_path = self.__job_from_sources(sources)
-            if job_path == None:
+            if job_path is None:
                 self.__logger.debug(
-                    "Not enough work available to fill %s hosts" % workgroup_name
+                    "Not enough work available to fill %s hosts"
+                    % workgroup_name
                 )
                 break  # no more work to do
             await self.__push_job(lowest_host, job_path)
@@ -489,7 +501,9 @@ class Commander:
         self.__logger.info("nmap hosts: %s", nmap_hosts)
         self.__logger.info("nessus hosts: %s", nessus_hosts)
         self.__logger.info("Jobs per nmap host: %d", config.jobs_per_nmap_host)
-        self.__logger.info("Jobs per nessus host: %d", config.jobs_per_nessus_host)
+        self.__logger.info(
+            "Jobs per nessus host: %d", config.jobs_per_nessus_host
+        )
         self.__logger.info("Next scan fetch limit: %d", self.__next_scan_limit)
         self.__logger.info("Poll interval: %d", config.poll_interval)
         self.__logger.info("Test mode: %s", self.__test_mode)
@@ -525,7 +539,9 @@ class Commander:
                     for host in nessus_hosts
                     if host not in [h["host"] for h in self.__hosts_on_cooldown]
                 ]
-                await asyncio.gather(*nmap_tasks, *nessus_tasks, return_exceptions=True)
+                await asyncio.gather(
+                    *nmap_tasks, *nessus_tasks, return_exceptions=True
+                )
 
                 # Process completed jobs.
                 await self.__process_completed_jobs()
@@ -539,11 +555,14 @@ class Commander:
                 elapsed = asyncio.get_event_loop().time() - cycle_start
                 sleep_time = max(0.0, config.poll_interval - elapsed)
                 if sleep_time > 0:
-                    self.__logger.debug("Sleeping for %1.1f seconds.", sleep_time)
+                    self.__logger.debug(
+                        "Sleeping for %1.1f seconds.", sleep_time
+                    )
                     await asyncio.sleep(sleep_time)
                 else:
                     self.__logger.debug(
-                        "No time to sleep. Last cycle took %1.1f seconds.", elapsed
+                        "No time to sleep. Last cycle took %1.1f seconds.",
+                        elapsed,
                     )
 
             except Exception as e:
@@ -633,7 +652,8 @@ class Commander:
                     nessus_hosts.sort()
                 self.__hosts_on_cooldown.remove(host_info)
                 self.__logger.debug(
-                    "Host '%s' has been put back into rotation", host_info["host"]
+                    "Host '%s' has been put back into rotation",
+                    host_info["host"],
                 )
             else:
                 self.__logger.debug(
@@ -677,7 +697,8 @@ async def _async_main(args: argparse.Namespace) -> None:
     workingDir = Path.cwd() / args.working_dir
     if not workingDir.exists():
         print(
-            'Working directory "%s" does not exist.  Attempting to create...' % str(workingDir),
+            'Working directory "%s" does not exist.  Attempting to create...'
+            % str(workingDir),
             file=sys.stderr,
         )
         workingDir.mkdir()

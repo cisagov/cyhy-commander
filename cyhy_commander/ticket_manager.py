@@ -124,7 +124,12 @@ class VulnTicketManager:
         # Build a lookup: (source, source_id, port, protocol) → ticket
         ticket_map: dict[tuple, TicketDoc] = {}
         for ticket in existing_tickets:
-            key = (ticket.source, ticket.source_id, ticket.port, ticket.protocol)
+            key = (
+                ticket.source,
+                ticket.source_id,
+                ticket.port,
+                ticket.protocol,
+            )
             # Prefer open tickets over closed ones when there are duplicates.
             if key not in ticket_map or ticket.open:
                 ticket_map[key] = ticket
@@ -146,8 +151,13 @@ class VulnTicketManager:
                 await self._verify_ticket(existing, vuln, snapshot_id)
             else:
                 # Existing closed ticket — check if within reopen window.
-                reopen_cutoff = _utcnow() - timedelta(days=self.REOPEN_WINDOW_DAYS)
-                if existing.time_closed and _as_utc(existing.time_closed) >= reopen_cutoff:
+                reopen_cutoff = _utcnow() - timedelta(
+                    days=self.REOPEN_WINDOW_DAYS
+                )
+                if (
+                    existing.time_closed
+                    and _as_utc(existing.time_closed) >= reopen_cutoff
+                ):
                     await self._reopen_ticket(existing, vuln, snapshot_id)
                 else:
                     # Outside reopen window — open a fresh ticket.
@@ -252,7 +262,9 @@ class VulnTicketManager:
             reference=vuln.id,
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -293,7 +305,9 @@ class VulnTicketManager:
             reference=vuln.id,
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -328,7 +342,9 @@ class VulnTicketManager:
             reason="vulnerability no longer detected",
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -368,7 +384,9 @@ class VulnTicketManager:
         from cyhy_db.models.ticket_doc import EventDelta
 
         now = _utcnow()
-        delta = EventDelta(**{"from": True, "key": "false_positive", "to": False})
+        delta = EventDelta(
+            **{"from": True, "key": "false_positive", "to": False}
+        )
         ticket.false_positive = False
         ticket.fp_expiration_date = None
         ticket.add_event(
@@ -473,7 +491,12 @@ class IPPortTicketManager:
         # Build lookup: (source, source_id, port, protocol) → ticket
         ticket_map: dict[tuple, TicketDoc] = {}
         for ticket in existing_tickets:
-            key = (ticket.source, ticket.source_id, ticket.port, ticket.protocol)
+            key = (
+                ticket.source,
+                ticket.source_id,
+                ticket.port,
+                ticket.protocol,
+            )
             if key not in ticket_map or ticket.open:
                 ticket_map[key] = ticket
 
@@ -499,8 +522,13 @@ class IPPortTicketManager:
             elif existing.open:
                 await self._verify_ticket(existing, port_scan, snapshot_id)
             else:
-                reopen_cutoff = _utcnow() - timedelta(days=self.REOPEN_WINDOW_DAYS)
-                if existing.time_closed and _as_utc(existing.time_closed) >= reopen_cutoff:
+                reopen_cutoff = _utcnow() - timedelta(
+                    days=self.REOPEN_WINDOW_DAYS
+                )
+                if (
+                    existing.time_closed
+                    and _as_utc(existing.time_closed) >= reopen_cutoff
+                ):
                     await self._reopen_ticket(existing, port_scan, snapshot_id)
                 else:
                     await self._open_ticket(port_scan, snapshot_id)
@@ -589,7 +617,9 @@ class IPPortTicketManager:
             reference=port_scan.id,
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -625,7 +655,9 @@ class IPPortTicketManager:
             reference=port_scan.id,
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -657,7 +689,9 @@ class IPPortTicketManager:
             reason="port no longer detected as open",
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
@@ -755,7 +789,9 @@ class IPTicketManager:
             reason="host no longer up",
             time=now,
         )
-        if snapshot_id is not None and not _snapshot_id_in_links(snapshot_id, ticket.snapshots):
+        if snapshot_id is not None and not _snapshot_id_in_links(
+            snapshot_id, ticket.snapshots
+        ):
             if ticket.snapshots is None:
                 ticket.snapshots = []
             ticket.snapshots.append(_snapshot_link(snapshot_id))
