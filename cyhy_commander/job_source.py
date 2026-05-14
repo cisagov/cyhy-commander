@@ -167,7 +167,7 @@ class DatabaseJobSource(JobSource):
 
         # Create the job directory.
         date = _utcnow().isoformat().replace(":", "").replace("-", "")
-        dir_name = "%s-%s" % (self.__job_type.value, date)
+        dir_name = "{}-{}".format(self.__job_type.value, date)
         job_path = os.path.join(self.__temp_dir, dir_name)
         os.mkdir(job_path)
 

@@ -2,7 +2,8 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ class SSHTransportConfig:
 
 
 class SSHTransport:
-    def __init__(self, logger: Any, config: Optional[SSHTransportConfig] = None):
+    def __init__(self, logger: Any, config: SSHTransportConfig | None = None):
         self._logger = logger
         self._cfg = config or SSHTransportConfig()
 
@@ -52,7 +53,7 @@ class SSHTransport:
             f"ServerAliveCountMax={self._cfg.server_alive_count_max}",
             *list(self._cfg.extra_ssh_args),
         ]
-        return " ".join(shlex.quote(p) for p in parts)
+        return shlex.join(parts)
 
     def _rsync_common(self) -> list[str]:
         # --archive preserves perms/symlinks/times/etc.
@@ -73,11 +74,11 @@ class SSHTransport:
         self,
         host: str,
         remote_command: str,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
         timeout = timeout_seconds if timeout_seconds is not None else self._cfg.command_timeout_seconds
         argv = self._ssh_base(host) + [remote_command]
-        self._logger.debug("SSH run: %s", " ".join(shlex.quote(a) for a in argv))
+        self._logger.debug("SSH run: %s", shlex.join(argv))
         return subprocess.run(
             argv,
             text=True,
@@ -106,7 +107,7 @@ class SSHTransport:
         dst = f"{local_dir.rstrip('/')}/"
 
         argv = self._rsync_common() + [src, dst]
-        self._logger.debug("rsync pull: %s", " ".join(shlex.quote(a) for a in argv))
+        self._logger.debug("rsync pull: %s", shlex.join(argv))
 
         cp = subprocess.run(
             argv,
@@ -146,7 +147,7 @@ class SSHTransport:
         dst = f"{host}:{remote_dir}/"
 
         argv = self._rsync_common() + ["--mkpath", src, dst]
-        self._logger.debug("rsync push: %s", " ".join(shlex.quote(a) for a in argv))
+        self._logger.debug("rsync push: %s", shlex.join(argv))
 
         cp = subprocess.run(
             argv,

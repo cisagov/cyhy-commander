@@ -61,7 +61,7 @@ RISKY_SERVICES = [
 ]
 
 
-class NmapImporter(object):
+class NmapImporter:
     SOURCE = "nmap"
 
     def __init__(self, stage=Stage.PORTSCAN):

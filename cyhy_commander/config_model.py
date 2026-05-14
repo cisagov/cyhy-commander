@@ -56,7 +56,7 @@ class TimeoutsConfig(BaseModel):
     rsync_operation: Annotated[int, Field(gt=0, default=300)]
 
     @model_validator(mode="after")
-    def connect_less_than_command(self) -> "TimeoutsConfig":
+    def connect_less_than_command(self) -> TimeoutsConfig:
         """Validate that ssh_connect timeout is less than ssh_command timeout."""
         if self.ssh_connect >= self.ssh_command:
             raise ValueError("ssh_connect must be less than ssh_command timeout")

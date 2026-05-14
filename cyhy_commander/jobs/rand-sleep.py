@@ -8,7 +8,7 @@ import time
 MEAN_SLEEP_TIME = 60
 
 t = random.expovariate(1.0 / MEAN_SLEEP_TIME)
-print("Sleeping for {:0.1f} seconds.".format(t))
+print(f"Sleeping for {t:0.1f} seconds.")
 time.sleep(t)
 print("Done")
 sys.exit(0)

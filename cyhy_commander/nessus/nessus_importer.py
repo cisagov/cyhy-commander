@@ -62,7 +62,7 @@ def _range_string_to_list(port_range_string: str) -> list[int]:
     return sorted(ports)
 
 
-class NessusImporter(object):
+class NessusImporter:
     SOURCE = "nessus"
 
     def __init__(self, manual_scan: bool = False):
@@ -116,7 +116,7 @@ class NessusImporter(object):
         if string_list[-1] == "":
             # list ends with ; creating a non-int empty string
             string_list.pop()
-        plugin_set = set(int(s) for s in string_list)
+        plugin_set = {int(s) for s in string_list}
         self.__logger.debug(
             "Found %d plugin_ids in Nessus file", len(plugin_set)
         )
@@ -220,7 +220,7 @@ class NessusImporter(object):
             with gzip.open(filename, "r") as f:
                 parse(f, handler)
         else:
-            with open(filename, "r") as f:
+            with open(filename) as f:
                 parse(f, handler)
 
         # Now process all collected data asynchronously

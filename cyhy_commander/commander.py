@@ -65,7 +65,7 @@ NESSUS_WORKGROUP = "nessus"
 NMAP_WORKGROUP = "nmap"
 
 
-class Commander(object):
+class Commander:
     def __init__(self, config: CommanderConfig):
         # Set up logging first in order to log any errors as soon as possible.
         self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander")
@@ -75,7 +75,7 @@ class Commander(object):
         self.__db = None
         self.__failed_job_queue = None
         self.__failure_sinks = []
-        self.__host_exceptions = defaultdict(lambda: 0)
+        self.__host_exceptions = defaultdict(int)
         self.__hosts_on_cooldown = []
         self.__is_running = True
         self.__keep_failures = config.keep_failures
@@ -187,7 +187,7 @@ class Commander(object):
     async def __done_jobs(self, host: str) -> None:
         try:
             cp = await asyncio.to_thread(
-                self.__ssh.run, host, "ls {d}".format(d=shlex.quote(DONE_DIR))
+                self.__ssh.run, host, f"ls {shlex.quote(DONE_DIR)}"
             )
             if cp.returncode != 0:
                 self.__logger.warning(
@@ -258,7 +258,7 @@ class Commander(object):
 
                 # remove remote dir
                 cp_rm = await asyncio.to_thread(
-                    self.__ssh.run, host, "rm -rf {p}".format(p=shlex.quote(job_path))
+                    self.__ssh.run, host, f"rm -rf {shlex.quote(job_path)}"
                 )
                 if cp_rm.returncode == 0:
                     self.__logger.info(
@@ -289,7 +289,7 @@ class Commander(object):
     async def __running_job_count(self, host: str):
         try:
             cp = await asyncio.to_thread(
-                self.__ssh.run, host, "ls {d}".format(d=shlex.quote(RUNNING_DIR))
+                self.__ssh.run, host, f"ls {shlex.quote(RUNNING_DIR)}"
             )
             if cp.returncode != 0:
                 self.__logger.warning(
@@ -331,7 +331,7 @@ class Commander(object):
             cp_touch = await asyncio.to_thread(
                 self.__ssh.run,
                 host,
-                "touch {p}".format(p=shlex.quote(str(PurePosixPath(remote_job_dir) / READY_FILE))),
+                f"touch {shlex.quote(str(PurePosixPath(remote_job_dir) / READY_FILE))}",
             )
             if cp_touch.returncode != 0:
                 self.__logger.error(
@@ -367,7 +367,7 @@ class Commander(object):
             dest = str(Path(PUSHED_DIR) / Path(job_path).name)
             dest = self.__unique_filename(dest)
             shutil.move(job_path, dest)
-            self.__logger.info("%s moved locally to %s" % (job_path, dest))
+            self.__logger.info("{} moved locally to {}".format(job_path, dest))
 
     def __lowest_host(self, counts):
         lowest_count = None
