@@ -8,7 +8,7 @@ import time
 
 MEAN_SLEEP_TIME = 60
 
-t = random.expovariate(1.0 / MEAN_SLEEP_TIME)
+t = random.expovariate(1.0 / MEAN_SLEEP_TIME)  # nosec B311  # noqa: DUO102
 print(f"Sleeping for {t:0.1f} seconds.")
 time.sleep(t)
 print("Done")

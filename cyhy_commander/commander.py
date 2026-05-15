@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import cyhy_db
-from cyhy_config import get_config  # type: ignore[import-not-found]
+from cyhy_config import get_config
 from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER, setup_logging
 
@@ -369,7 +369,7 @@ class Commander:
             dest = str(Path(PUSHED_DIR) / Path(job_path).name)
             dest = self.__unique_filename(dest)
             shutil.move(job_path, dest)
-            self.__logger.info("{} moved locally to {}".format(job_path, dest))
+            self.__logger.info(f"{job_path} moved locally to {dest}")
 
     def __lowest_host(self, counts: dict[str, int]) -> str | None:
         lowest_count = None
@@ -385,7 +385,7 @@ class Commander:
     def __job_from_sources(self, sources: list[Any]) -> str | None:
         job = None
         if RANDOMIZE_SOURCES:
-            random.shuffle(sources)
+            random.shuffle(sources)  # nosec B311  # noqa: DUO102
         for source in sources:
             self.__logger.debug("Checking %s for a job." % source)
             job = source.get_job()

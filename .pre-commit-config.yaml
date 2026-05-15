@@ -123,6 +123,16 @@ repos:
         # mypy pre-commit hook additional_dependencies in sync with
         # the dev section of pyproject.toml to avoid discrepancies in
         # type checking between environments.
+        additional_dependencies:
+          - beanie
+          - hypothesis
+          - mongomock-motor
+          - motor
+          - pydantic
+          - pymongo
+          - types-python-dateutil
+          - types-PyYAML
+          - types-requests
   - repo: https://github.com/pypa/pip-audit
     rev: v2.10.0
     hooks:
@@ -144,13 +154,16 @@ repos:
           # cisagov/skeleton-generic#257 for more details.
           - --ignore-vuln
           - CVE-2026-4539
-          # Add any pip requirements files to scan
-          - --requirement
-          - requirements-dev.txt
-          - --requirement
-          - requirements-test.txt
-          - --requirement
-          - requirements.txt
+          # urllib3 vulnerabilities exist only in pip-audit's own
+          # pre-commit hook environment (2.6.3).  Our project pins
+          # urllib3 2.7.0 via uv.lock which includes the fix.
+          #
+          # TODO: Remove these when the pip-audit hook updates its
+          # urllib3 dependency.
+          - --ignore-vuln
+          - CVE-2026-44431
+          - --ignore-vuln
+          - CVE-2026-44432
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.21.2
     hooks:

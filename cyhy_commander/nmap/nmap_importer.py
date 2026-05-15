@@ -14,13 +14,13 @@ from ipaddress import IPv4Address
 from typing import Any, cast
 
 # Third-party libraries
-import netaddr  # type: ignore[import-untyped]
+import netaddr
 
 # cyhy-db models and enums
 from cyhy_db.models import HostDoc, HostScanDoc, PortScanDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol, Stage
 from cyhy_logging import CYHY_ROOT_LOGGER
-from defusedxml.sax import parse  # type: ignore[import-untyped]
+from defusedxml.sax import parse
 
 # Local modules
 from .. import db_ops

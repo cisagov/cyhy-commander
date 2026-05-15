@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Any
-from xml.sax import (  # nosec B406  # nosec B406
+from xml.sax import (  # nosec B406  # noqa: DUO107
     ContentHandler,
     SAXNotRecognizedException,
 )

@@ -85,8 +85,8 @@ jobs:
           permissions_monitoring_config: ${{ vars.ACTIONS_PERMISSIONS_CONFIG }}
       - uses: actions/checkout@v5
         with:
-          # Needed by stefanzweifel/git-auto-commit-action to support the pull_request
-          # trigger.
+          # Needed by stefanzweifel/git-auto-commit-action
+          # to support the pull_request trigger.
           ref: ${{ github.head_ref }}
       - name: Blacken project
         uses: cisagov/action-blacken-python2@v1

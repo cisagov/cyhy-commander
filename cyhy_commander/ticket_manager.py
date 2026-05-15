@@ -215,7 +215,7 @@ class VulnTicketManager:
             source_id=vuln.plugin_id,
             time_opened=now,
         )
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.OPENED,
             reason="new vulnerability detected",
             reference=vuln.id,
@@ -257,7 +257,7 @@ class VulnTicketManager:
         now = _utcnow()
         old_severity = ticket.details.get("severity", 0)
         ticket.details = _vuln_details(vuln)
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.VERIFIED,
             reason="vulnerability re-detected",
             reference=vuln.id,
@@ -300,7 +300,7 @@ class VulnTicketManager:
         ticket.open = True
         ticket.time_closed = None
         ticket.details = _vuln_details(vuln)
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.REOPENED,
             reason="vulnerability re-detected within reopen window",
             reference=vuln.id,
@@ -338,7 +338,7 @@ class VulnTicketManager:
         now = _utcnow()
         ticket.open = False
         ticket.time_closed = now
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.CLOSED,
             reason="vulnerability no longer detected",
             time=now,
@@ -364,7 +364,7 @@ class VulnTicketManager:
             ticket: The open false-positive TicketDoc.
         """
         now = _utcnow()
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.UNVERIFIED,
             reason="vulnerability not detected; false positive — not closing",
             time=now,
@@ -386,11 +386,11 @@ class VulnTicketManager:
 
         now = _utcnow()
         delta = EventDelta(
-            **{"from": True, "key": "false_positive", "to": False}  # type: ignore[arg-type]
+            **{"from": True, "key": "false_positive", "to": False}
         )
         ticket.false_positive = False
         ticket.fp_expiration_date = None
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.CHANGED,
             reason="false positive expiration date passed",
             time=now,
@@ -579,7 +579,7 @@ class IPPortTicketManager:
             source_id=port_scan.port,
             time_opened=now,
         )
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.OPENED,
             reason="new open port detected",
             reference=port_scan.id,
@@ -612,7 +612,7 @@ class IPPortTicketManager:
         """
         now = _utcnow()
         ticket.details = _port_details(port_scan)
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.VERIFIED,
             reason="open port re-detected",
             reference=port_scan.id,
@@ -650,7 +650,7 @@ class IPPortTicketManager:
         ticket.open = True
         ticket.time_closed = None
         ticket.details = _port_details(port_scan)
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.REOPENED,
             reason="open port re-detected within reopen window",
             reference=port_scan.id,
@@ -685,7 +685,7 @@ class IPPortTicketManager:
         now = _utcnow()
         ticket.open = False
         ticket.time_closed = now
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.CLOSED,
             reason="port no longer detected as open",
             time=now,
@@ -712,7 +712,7 @@ class IPPortTicketManager:
             ticket: The open false-positive TicketDoc.
         """
         now = _utcnow()
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.UNVERIFIED,
             reason="port not detected; false positive — not closing",
             time=now,
@@ -785,7 +785,7 @@ class IPTicketManager:
         now = _utcnow()
         ticket.open = False
         ticket.time_closed = now
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.CLOSED,
             reason="host no longer up",
             time=now,
@@ -811,7 +811,7 @@ class IPTicketManager:
             ticket: The open false-positive TicketDoc.
         """
         now = _utcnow()
-        ticket.add_event(  # type: ignore[no-untyped-call]
+        ticket.add_event(
             action=TicketAction.UNVERIFIED,
             reason="host not up; false positive — not closing",
             time=now,
@@ -891,7 +891,7 @@ def _snapshot_link(snapshot_id: ObjectId) -> SnapshotDoc:
     Returns:
         A SnapshotDoc instance with only the ``id`` field populated.
     """
-    return SnapshotDoc.model_construct(id=snapshot_id)  # type: ignore[no-any-return]
+    return SnapshotDoc.model_construct(id=snapshot_id)
 
 
 def _snapshot_id_in_links(

@@ -1,5 +1,6 @@
 """This is the setup module for the cyhy-commander project."""
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 setup(
     name="cyhy-commander",

@@ -2,9 +2,12 @@
 
 import datetime
 from typing import Any
-from xml.sax import ContentHandler, SAXNotRecognizedException  # nosec B406
+from xml.sax import (  # nosec B406  # noqa: DUO107
+    ContentHandler,
+    SAXNotRecognizedException,
+)
 
-import netaddr  # type: ignore[import-untyped]
+import netaddr
 
 
 def copy_attrs(

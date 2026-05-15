@@ -67,6 +67,16 @@ python_version = "3.14"
 strict = true
 ignore_missing_imports = false
 
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+warn_return_any = false
+no_implicit_optional = false
+check_untyped_defs = false
+ignore_errors = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

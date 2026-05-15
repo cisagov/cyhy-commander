@@ -285,7 +285,7 @@ async def check_host_next_scans() -> None:
 
     done_hosts: list[HostDoc] = await HostDoc.find(
         HostDoc.status == Status.DONE,
-        HostDoc.next_scan <= now,  # type: ignore[operator]
+        HostDoc.next_scan <= now,
     ).to_list()
 
     if not done_hosts:

@@ -276,9 +276,9 @@ class NessusController:
         self, targets: str, policy_id: Any, scan_name: str, template_uuid: Any
     ) -> Any:
         """Create a new scan with the given targets, policy, name, and template."""
-        scan_details = dict()
+        scan_details = {}
         scan_details["uuid"] = template_uuid
-        scan_details["settings"] = dict()
+        scan_details["settings"] = {}
         scan_details["settings"]["name"] = scan_name
         scan_details["settings"]["policy_id"] = policy_id
         scan_details["settings"]["text_targets"] = targets
@@ -386,7 +386,7 @@ def main() -> None:
         NESSUS_API_CONFIGURATION_FILE,
     )
     with open(NESSUS_API_CONFIGURATION_FILE) as configuration_file:
-        api_configuration = yaml.load(
+        api_configuration = yaml.load(  # noqa: DUO109
             configuration_file, Loader=yaml.SafeLoader
         )
 

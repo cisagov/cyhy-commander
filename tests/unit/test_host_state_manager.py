@@ -336,7 +336,7 @@ class TestReturnType:
         with pytest.raises(
             AttributeError
         ):  # FrozenInstanceError is a subclass of AttributeError
-            result.new_stage = Stage.VULNSCAN  # type: ignore[misc]
+            result.new_stage = Stage.VULNSCAN
 
     def test_result_fields_have_correct_types(self, manager):
         """All fields of StateTransitionResult have the expected types."""

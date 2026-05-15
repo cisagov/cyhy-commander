@@ -11,8 +11,6 @@ Models:
     CommanderConfig: Top-level commander configuration model.
 """
 
-from typing import Annotated
-
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -23,10 +21,10 @@ class JobSizingConfig(BaseModel):
     are bundled into a single job sent to a scanner host.
     """
 
-    netscan1: Annotated[int, Field(gt=0, default=128)]
-    netscan2: Annotated[int, Field(gt=0, default=64)]
-    portscan: Annotated[int, Field(gt=0, default=8)]
-    vulnscan: Annotated[int, Field(gt=0, default=4)]
+    netscan1: int = Field(default=128, gt=0)
+    netscan2: int = Field(default=64, gt=0)
+    portscan: int = Field(default=8, gt=0)
+    vulnscan: int = Field(default=4, gt=0)
 
 
 class ScannerReliabilityConfig(BaseModel):
@@ -36,8 +34,8 @@ class ScannerReliabilityConfig(BaseModel):
     exceptions, and how long it remains unavailable.
     """
 
-    exceptions_before_cooldown: Annotated[int, Field(gt=0, default=2)]
-    cooldown_duration_minutes: Annotated[int, Field(gt=0, default=30)]
+    exceptions_before_cooldown: int = Field(default=2, gt=0)
+    cooldown_duration_minutes: int = Field(default=30, gt=0)
 
 
 class TimeoutsConfig(BaseModel):
@@ -49,11 +47,11 @@ class TimeoutsConfig(BaseModel):
     overall command budget.
     """
 
-    ssh_connect: Annotated[int, Field(gt=0, default=10)]
-    ssh_command: Annotated[int, Field(gt=0, default=60)]
-    ssh_keepalive_interval: Annotated[int, Field(gt=0, default=30)]
-    ssh_keepalive_count: Annotated[int, Field(gt=0, default=2)]
-    rsync_operation: Annotated[int, Field(gt=0, default=300)]
+    ssh_connect: int = Field(default=10, gt=0)
+    ssh_command: int = Field(default=60, gt=0)
+    ssh_keepalive_interval: int = Field(default=30, gt=0)
+    ssh_keepalive_count: int = Field(default=2, gt=0)
+    rsync_operation: int = Field(default=300, gt=0)
 
     @model_validator(mode="after")
     def connect_less_than_command(self) -> TimeoutsConfig:
@@ -81,17 +79,19 @@ class CommanderConfig(BaseModel):
     mongodb_database: str
     nmap_hosts: list[str] = Field(min_length=1)
     nessus_hosts: list[str] = Field(min_length=1)
-    jobs_per_nmap_host: Annotated[int, Field(gt=0, default=8)]
-    jobs_per_nessus_host: Annotated[int, Field(gt=0, default=8)]
-    poll_interval: Annotated[int, Field(gt=0, default=30)]
-    next_scan_limit: Annotated[int, Field(gt=0, default=2000)]
+    jobs_per_nmap_host: int = Field(default=8, gt=0)
+    jobs_per_nessus_host: int = Field(default=8, gt=0)
+    poll_interval: int = Field(default=30, gt=0)
+    next_scan_limit: int = Field(default=2000, gt=0)
     test_mode: bool = False
     keep_failures: bool = False
     keep_successes: bool = False
     shutdown_when_idle: bool = False
     log_level: str = "INFO"
-    job_sizing: JobSizingConfig = Field(default_factory=JobSizingConfig)  # type: ignore[arg-type]
-    scanner_reliability: ScannerReliabilityConfig = Field(
-        default_factory=ScannerReliabilityConfig  # type: ignore[arg-type]
+    job_sizing: JobSizingConfig = Field(
+        default_factory=lambda: JobSizingConfig()
     )
-    timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)  # type: ignore[arg-type]
+    scanner_reliability: ScannerReliabilityConfig = Field(
+        default_factory=lambda: ScannerReliabilityConfig()
+    )
+    timeouts: TimeoutsConfig = Field(default_factory=lambda: TimeoutsConfig())

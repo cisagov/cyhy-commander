@@ -17,7 +17,7 @@ Requirements: AC-8.2, MR-7.1
 import asyncio
 import os
 import signal
-import subprocess
+import subprocess  # nosec B404
 import sys
 import types
 from pathlib import Path
@@ -92,20 +92,20 @@ NESSUS_HOST = "nessus-scanner.test"
 
 def _make_config(**overrides) -> CommanderConfig:
     """Build a minimal CommanderConfig suitable for integration tests."""
-    defaults = dict(
-        mongodb_uri="mongodb://localhost:27017/",
-        mongodb_database="test_db",
-        nmap_hosts=[NMAP_HOST],
-        nessus_hosts=[NESSUS_HOST],
-        jobs_per_nmap_host=2,
-        jobs_per_nessus_host=2,
-        poll_interval=1,
-        next_scan_limit=10,
-        test_mode=False,  # Use False to avoid DatabaseJobSource bug in commander.py
-        keep_failures=False,
-        keep_successes=False,
-        shutdown_when_idle=False,
-    )
+    defaults = {
+        "mongodb_uri": "mongodb://localhost:27017/",
+        "mongodb_database": "test_db",
+        "nmap_hosts": [NMAP_HOST],
+        "nessus_hosts": [NESSUS_HOST],
+        "jobs_per_nmap_host": 2,
+        "jobs_per_nessus_host": 2,
+        "poll_interval": 1,
+        "next_scan_limit": 10,
+        "test_mode": False,  # Use False to avoid DatabaseJobSource bug in commander.py
+        "keep_failures": False,
+        "keep_successes": False,
+        "shutdown_when_idle": False,
+    }
     defaults.update(overrides)
     return CommanderConfig(**defaults)
 
@@ -652,7 +652,7 @@ class TestSIGTERMIntegration:
                         loop.remove_signal_handler(signal.SIGTERM)
                         loop.remove_signal_handler(signal.SIGINT)
                     except Exception:
-                        pass
+                        pass  # nosec B110
 
         asyncio.run(_run())
 
