@@ -1,10 +1,8 @@
 """Unit tests for job sink classes."""
 
 import asyncio
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import pytest
 from cyhy_db.models.enum import Stage
 
 from cyhy_commander.job_sink import NessusSink, NmapSink, NoOpSink, TryAgainSink

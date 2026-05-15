@@ -2,10 +2,7 @@
 
 import asyncio
 import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from cyhy_commander.job_source import (
     DatabaseJobSource,
@@ -50,7 +47,7 @@ class TestDirectoryJobSource:
 
     def test_creates_directory_if_missing(self, tmp_path):
         dir_path = str(tmp_path / "new_dir")
-        source = DirectoryJobSource(dir_path)
+        _source = DirectoryJobSource(dir_path)  # noqa: F841
         assert os.path.exists(dir_path)
 
     def test_get_job_empty_dir(self, tmp_path):
@@ -132,7 +129,9 @@ class TestDatabaseJobSource:
                 # Should contain a job file and a targets file
                 files = os.listdir(result)
                 assert "job" in files
-                assert any("netscan1" in f and f.endswith(".txt") for f in files)
+                assert any(
+                    "netscan1" in f and f.endswith(".txt") for f in files
+                )
 
         asyncio.run(_run())
 
@@ -159,9 +158,7 @@ class TestDatabaseJobSource:
                 ),
                 patch(
                     "cyhy_commander.job_source.PortScanDoc.find",
-                    return_value=MagicMock(
-                        to_list=AsyncMock(return_value=[])
-                    ),
+                    return_value=MagicMock(to_list=AsyncMock(return_value=[])),
                 ),
             ):
                 result = await source.make_job()

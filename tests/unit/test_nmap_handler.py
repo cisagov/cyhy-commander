@@ -1,9 +1,6 @@
 """Unit tests for NmapContentHandler SAX parsing."""
 
-import io
-from xml.sax import parseString  # nosec B406
-
-import pytest
+from defusedxml.sax import parseString  # noqa: DUO107  # nosec B406
 
 from cyhy_commander.nmap.nmap_handler import NmapContentHandler
 

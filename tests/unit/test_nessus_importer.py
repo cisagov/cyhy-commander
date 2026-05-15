@@ -5,8 +5,6 @@ import os
 import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from cyhy_commander.nessus.nessus_importer import NessusImporter
 
 NESSUS_XML = """\

@@ -1,8 +1,6 @@
 """Unit tests for NessusV2ContentHandler SAX parsing."""
 
-from xml.sax import parseString  # nosec B406
-
-import pytest
+from defusedxml.sax import parseString  # noqa: DUO107  # nosec B406
 
 from cyhy_commander.nessus.nessus_handler import NessusV2ContentHander
 
@@ -25,7 +23,9 @@ NESSUS_XML_ONE_HOST_ONE_FINDING = """\
 <tag name="HOST_START">Mon Jan 01 00:00:00 2026</tag>
 <tag name="HOST_END">Mon Jan 01 00:05:00 2026</tag>
 </HostProperties>
-<ReportItem port="443" svc_name="https" protocol="tcp" severity="3" pluginID="99999" pluginName="Test Vuln" pluginFamily="Web Servers">
+<ReportItem port="443" svc_name="https" protocol="tcp"
+ severity="3" pluginID="99999" pluginName="Test Vuln"
+ pluginFamily="Web Servers">
 <description>A test vulnerability</description>
 <solution>Upgrade software</solution>
 <synopsis>Test synopsis</synopsis>
@@ -58,7 +58,9 @@ NESSUS_XML_MULTIPLE_HOSTS = """\
 <tag name="HOST_START">Tue Feb 01 10:00:00 2026</tag>
 <tag name="HOST_END">Tue Feb 01 10:10:00 2026</tag>
 </HostProperties>
-<ReportItem port="22" svc_name="ssh" protocol="tcp" severity="2" pluginID="11111" pluginName="SSH Vuln" pluginFamily="General">
+<ReportItem port="22" svc_name="ssh" protocol="tcp"
+ severity="2" pluginID="11111" pluginName="SSH Vuln"
+ pluginFamily="General">
 <description>SSH issue</description>
 <risk_factor>Medium</risk_factor>
 <cvss_base_score>5.0</cvss_base_score>
@@ -70,7 +72,9 @@ NESSUS_XML_MULTIPLE_HOSTS = """\
 <tag name="HOST_START">Tue Feb 01 10:00:00 2026</tag>
 <tag name="HOST_END">Tue Feb 01 10:10:00 2026</tag>
 </HostProperties>
-<ReportItem port="80" svc_name="http" protocol="tcp" severity="1" pluginID="22222" pluginName="HTTP Info" pluginFamily="Web Servers">
+<ReportItem port="80" svc_name="http" protocol="tcp"
+ severity="1" pluginID="22222" pluginName="HTTP Info"
+ pluginFamily="Web Servers">
 <description>HTTP info disclosure</description>
 <risk_factor>Low</risk_factor>
 <cvss_base_score>2.0</cvss_base_score>
@@ -99,7 +103,9 @@ NESSUS_XML_BANNED_PLUGIN = """\
 <tag name="HOST_START">Wed Mar 01 00:00:00 2026</tag>
 <tag name="HOST_END">Wed Mar 01 00:05:00 2026</tag>
 </HostProperties>
-<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="11219" pluginName="Nessus SYN scanner" pluginFamily="Port scanners">
+<ReportItem port="0" svc_name="general" protocol="tcp"
+ severity="0" pluginID="11219" pluginName="Nessus SYN scanner"
+ pluginFamily="Port scanners">
 <description>SYN scanner info</description>
 </ReportItem>
 </ReportHost>

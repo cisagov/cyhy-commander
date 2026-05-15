@@ -95,6 +95,9 @@ select = ["C", "D", "E", "F", "W", "B", "B950"]
 # Instead use flake8-bugbear's B950, which allows up to 10% overage.
 # Also ignore W503 (line break before binary operator) — disagrees with PEP8.
 extend-ignore = ["E501", "W503"]
+# Test files don't need public method docstrings or worry about
+# unused imports (fixtures) and line length in test data.
+per-file-ignores = ["tests/*:B950,D102,D103,D401,D403"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]

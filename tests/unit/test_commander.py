@@ -2,18 +2,12 @@
 
 import asyncio
 import os
-import shutil
 import subprocess
-import sys
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from cyhy_commander.commander import (
     Commander,
-    _async_main,
     cli_entry,
     load_config,
 )
@@ -82,7 +76,8 @@ class TestSetupSources:
         config = _make_config(test_mode=True)
         cmd = Commander(config)
         cmd._Commander__setup_sources()
-        # In test mode: 3 nmap sources (NETSCAN1, NETSCAN2, PORTSCAN) + 1 nessus (VULNSCAN)
+        # In test mode: 3 nmap sources (NETSCAN1, NETSCAN2, PORTSCAN)
+        # + 1 nessus (VULNSCAN)
         assert len(cmd._Commander__nmap_sources) == 3
         assert len(cmd._Commander__nessus_sources) == 1
 
@@ -255,7 +250,9 @@ class TestDoneJobs:
         mock_ssh = MagicMock()
         mock_ssh.run.side_effect = [
             subprocess.CompletedProcess([], 0, stdout="JOB1", stderr=""),
-            subprocess.CompletedProcess([], 0, stdout="1", stderr=""),  # non-zero
+            subprocess.CompletedProcess(
+                [], 0, stdout="1", stderr=""
+            ),  # non-zero
             subprocess.CompletedProcess([], 0, stdout="", stderr=""),  # rm
         ]
         mock_ssh.rsync_pull_dir = MagicMock()
@@ -354,9 +351,7 @@ class TestFillHosts:
         async def _run():
             counts = {"host1": 0, "host2": 1}
             with patch("cyhy_commander.commander.RANDOMIZE_SOURCES", False):
-                await cmd._Commander__fill_hosts(
-                    counts, [source], "nmap", 2
-                )
+                await cmd._Commander__fill_hosts(counts, [source], "nmap", 2)
 
         asyncio.run(_run())
 
@@ -555,9 +550,7 @@ class TestCliEntry:
                 "sys.argv",
                 ["cyhy-commander", "/tmp/workdir", "--debug"],
             ),
-            patch(
-                "cyhy_commander.commander.asyncio.run"
-            ) as mock_run,
+            patch("cyhy_commander.commander.asyncio.run") as mock_run,
         ):
             cli_entry()
             mock_run.assert_called_once()
