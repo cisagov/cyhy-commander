@@ -10,9 +10,9 @@ description = "CyHy Commander: job orchestration and scanner management"
 license = { text = "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication" }
 dependencies = [
     "beanie>=1.21.0",
-    "cyhy-config>=1.0.0",
-    "cyhy-db>=1.0.0",
-    "cyhy-logging>=1.0.0",
+    "cyhy-config @ git+https://github.com/cisagov/cyhy-config.git@v1",
+    "cyhy-db @ git+https://github.com/cisagov/cyhy-db.git@v2",
+    "cyhy-logging @ git+https://github.com/cisagov/cyhy-logging.git@v1",
     "lockfile==0.12.2",
     "motor>=3.6.0",
     "numpy>=1.26.0",
@@ -44,6 +44,9 @@ dev = [
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["cyhy_commander"]
