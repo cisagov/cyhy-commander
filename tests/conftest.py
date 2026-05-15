@@ -70,6 +70,17 @@ def mock_db():
     client = mongomock_motor.AsyncMongoMockClient()
     db = client["test_db"]
 
+    # Patch mongomock's list_collection_names to accept the
+    # authorizedCollections kwarg that beanie/pymongo 4.x passes.
+    _orig = db.delegate.list_collection_names
+
+    def _patched(*args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        kwargs.pop("nameOnly", None)
+        return _orig(*args, **kwargs)
+
+    db.delegate.list_collection_names = _patched
+
     async def _init():
         await beanie.init_beanie(
             database=db, document_models=_ALL_DOCUMENT_MODELS

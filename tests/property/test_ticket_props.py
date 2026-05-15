@@ -46,6 +46,16 @@ def _fresh_db():
     client = mongomock_motor.AsyncMongoMockClient()
     db = client["prop_test_db"]
 
+    # Patch mongomock to accept kwargs from beanie/pymongo 4.x
+    _orig = db.delegate.list_collection_names
+
+    def _patched(*args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        kwargs.pop("nameOnly", None)
+        return _orig(*args, **kwargs)
+
+    db.delegate.list_collection_names = _patched
+
     all_models = [KEVDoc, PortScanDoc, TicketDoc, VulnScanDoc]
 
     async def _init():
