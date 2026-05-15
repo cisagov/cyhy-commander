@@ -62,11 +62,11 @@ class NmapContentHandler(ContentHandler):
             self.first_osmatch_done_for_host = False
             self.currentHost = {"ports": {}}
             if "starttime" in attrs:
-                self.currentHost["starttime"] = (
-                    datetime.datetime.utcfromtimestamp(int(attrs["starttime"]))
+                self.currentHost["starttime"] = datetime.datetime.fromtimestamp(
+                    int(attrs["starttime"]), datetime.UTC
                 )
-                self.currentHost["endtime"] = (
-                    datetime.datetime.utcfromtimestamp(int(attrs["endtime"]))
+                self.currentHost["endtime"] = datetime.datetime.fromtimestamp(
+                    int(attrs["endtime"]), datetime.UTC
                 )
             else:
                 self.currentHost["starttime"] = self.taskStartTime
@@ -121,14 +121,14 @@ class NmapContentHandler(ContentHandler):
         elif name == "taskbegin":
             # save start time for hosts that don't have a time reported
             if "time" in attrs:
-                self.taskStartTime = datetime.datetime.utcfromtimestamp(
-                    int(attrs["time"])
+                self.taskStartTime = datetime.datetime.fromtimestamp(
+                    int(attrs["time"]), datetime.UTC
                 )
         elif name == "taskend":
             # save end time for hosts that don't have a time reported
             if "time" in attrs:
-                self.taskEndTime = datetime.datetime.utcfromtimestamp(
-                    int(attrs["time"])
+                self.taskEndTime = datetime.datetime.fromtimestamp(
+                    int(attrs["time"]), datetime.UTC
                 )
 
     def endElement(self, name: str) -> None:

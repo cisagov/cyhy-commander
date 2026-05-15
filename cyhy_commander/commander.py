@@ -431,7 +431,7 @@ class Commander:
                     sink,
                     extra={"job": job_name, "stage": _job_stage},
                 )
-                sink.handle(job_path)
+                await sink.handle(job_path)
                 self.__logger.info(
                     "Processing completed for %s",
                     job_path,
@@ -455,7 +455,7 @@ class Commander:
                     sink,
                     extra={"job": job_name, "stage": _job_stage},
                 )
-                sink.handle(job_path)
+                await sink.handle(job_path)
                 self.__logger.info(
                     "Processing completed for %s",
                     job_path,
