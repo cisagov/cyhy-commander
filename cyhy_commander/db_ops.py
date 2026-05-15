@@ -11,8 +11,10 @@ Requirements: FR-8.4, FR-3.1, FR-3.4, AC-5.4
 import logging
 from datetime import datetime, timezone
 from ipaddress import IPv4Address
+from typing import Any
 
 # Third-party libraries
+from beanie import SortDirection
 from beanie.operators import In, Set
 from cyhy_db.models import HostDoc, RequestDoc, SystemControlDoc, TallyDoc
 from cyhy_db.models.enum import (
@@ -79,8 +81,11 @@ async def fetch_ready_hosts(
         await HostDoc.find(*query_filters)
         .sort(
             [
-                (HostDoc.priority, 1),  # ascending: most urgent first
-                (HostDoc.r, 1),  # random tiebreaker
+                (
+                    "priority",
+                    SortDirection.ASCENDING,
+                ),  # ascending: most urgent first
+                ("r", SortDirection.ASCENDING),  # random tiebreaker
             ]
         )
         .limit(count)
@@ -93,7 +98,7 @@ async def fetch_ready_hosts(
     # Atomically mark all fetched hosts as RUNNING.
     ip_list = [host.ip for host in hosts]
     await HostDoc.find(In(HostDoc.ip, ip_list)).update(
-        Set({HostDoc.status: Status.RUNNING})
+        Set({HostDoc.status: Status.RUNNING})  # type: ignore[no-untyped-call]
     )
 
     # Refresh the in-memory objects to reflect the saved status.
@@ -114,7 +119,7 @@ async def fetch_ready_hosts(
 # ---------------------------------------------------------------------------
 
 
-def _is_within_scan_window(window, now: datetime) -> bool:
+def _is_within_scan_window(window: Any, now: datetime) -> bool:
     """Return True if *now* falls within the given scan *window*.
 
     A ``Window`` has three fields:
@@ -163,11 +168,12 @@ def _is_within_scan_window(window, now: datetime) -> bool:
     total_week_minutes = 7 * 24 * 60
     if window_end_minutes > total_week_minutes:
         # Window wraps around midnight Sunday → Monday.
-        return now_minutes >= window_start_minutes or now_minutes < (
-            window_end_minutes % total_week_minutes
+        return bool(
+            now_minutes >= window_start_minutes
+            or now_minutes < (window_end_minutes % total_week_minutes)
         )
 
-    return window_start_minutes <= now_minutes < window_end_minutes
+    return bool(window_start_minutes <= now_minutes < window_end_minutes)
 
 
 async def balance_ready_hosts() -> None:
@@ -235,7 +241,12 @@ async def balance_ready_hosts() -> None:
                     HostDoc.owner == owner,
                     HostDoc.status == Status.WAITING,
                 )
-                .sort([(HostDoc.priority, 1), (HostDoc.r, 1)])
+                .sort(
+                    [
+                        ("priority", SortDirection.ASCENDING),
+                        ("r", SortDirection.ASCENDING),
+                    ]
+                )
                 .limit(slots_available)
                 .to_list()
             )
@@ -245,7 +256,7 @@ async def balance_ready_hosts() -> None:
 
         ip_list = [h.ip for h in waiting_hosts]
         await HostDoc.find(In(HostDoc.ip, ip_list)).update(
-            Set({HostDoc.status: Status.READY})
+            Set({HostDoc.status: Status.READY})  # type: ignore[no-untyped-call]
         )
         logger.debug(
             "Moved %d WAITING hosts to READY for owner %s.",
@@ -274,7 +285,7 @@ async def check_host_next_scans() -> None:
 
     done_hosts: list[HostDoc] = await HostDoc.find(
         HostDoc.status == Status.DONE,
-        HostDoc.next_scan <= now,
+        HostDoc.next_scan <= now,  # type: ignore[operator]
     ).to_list()
 
     if not done_hosts:
@@ -416,7 +427,7 @@ async def _update_tally(
     if tally is None:
         tally = TallyDoc(id=owner)
 
-    def _get_stage_counts(tally: TallyDoc, stage: Stage):
+    def _get_stage_counts(tally: TallyDoc, stage: Stage) -> Any:
         """Return the StatusCounts object for *stage* on *tally*."""
         return getattr(tally.counts, stage.value, None)
 
@@ -449,7 +460,7 @@ async def should_commander_pause() -> bool:
         SystemControlDoc.action == ControlAction.PAUSE,
         SystemControlDoc.target == ControlTarget.COMMANDER,
     )
-    return doc is not None
+    return bool(doc is not None)
 
 
 # ---------------------------------------------------------------------------

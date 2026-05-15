@@ -9,6 +9,7 @@ import logging
 import secrets
 import sys
 import time
+from typing import Any
 
 # Third-Party Libraries
 import requests
@@ -42,7 +43,7 @@ PORTS_FILE_GLOB = "ports"
 
 LOGGER_FORMAT = "%(asctime)-15s %(levelname)s %(message)s"
 LOGGER_LEVEL = logging.INFO
-LOGGER = None  # initialized in setup_logging()
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
 # Seconds between polling requests to see if a running scan has finished
 WAIT_TIME_SEC = 10
@@ -57,6 +58,9 @@ FAILED_REQUEST_RETRY_WAIT_SEC = 30
 # Controller.
 MAX_SLEEP_SEC = 30
 
+# Timeout in seconds for all HTTP requests to the Nessus API.
+REQUEST_TIMEOUT_SEC = 60
+
 if DEBUG:
     # Standard Python Libraries
     import http.client
@@ -69,11 +73,9 @@ if DEBUG:
     requests_log.propagate = True
 
 
-def setup_logging():
+def setup_logging() -> None:
     """Configure the module-level logger."""
-    global LOGGER
     logging.captureWarnings(True)  # Added to capture InsecureRequestWarnings
-    LOGGER = logging.getLogger(__name__)
     LOGGER.setLevel(LOGGER_LEVEL)
     handler = logging.StreamHandler(sys.stderr)
     LOGGER.addHandler(handler)
@@ -81,7 +83,7 @@ def setup_logging():
     handler.setFormatter(formatter)
 
 
-def error_exit(message):
+def error_exit(message: str) -> None:
     """Print message to stderr and exit with a non-zero status."""
     print(message, file=sys.stderr)
     sys.exit(1)
@@ -90,14 +92,18 @@ def error_exit(message):
 class NessusController:
     """Client for the Nessus REST API."""
 
-    def __init__(self, nessus_url, nessus_username, nessus_password):
+    def __init__(
+        self, nessus_url: str, nessus_username: str, nessus_password: str
+    ) -> None:
         """Initialize the controller with connection credentials."""
         self.url = nessus_url
         self.username = nessus_username
         self.password = nessus_password
         self.token = None
 
-    def __make_request(self, target, method, payload=None):
+    def __make_request(
+        self, target: str, method: str, payload: Any = None
+    ) -> Any:
         num_retries = 0
         if payload:
             payload = json.dumps(payload)
@@ -133,6 +139,7 @@ class NessusController:
                     headers=headers,
                     params=payload,
                     verify=VERIFY_SSL,
+                    timeout=REQUEST_TIMEOUT_SEC,
                 )
             elif method == "POST":
                 response = requests.post(
@@ -140,6 +147,7 @@ class NessusController:
                     headers=headers,
                     data=payload,
                     verify=VERIFY_SSL,
+                    timeout=REQUEST_TIMEOUT_SEC,
                 )
             elif method == "PUT":
                 response = requests.put(
@@ -147,11 +155,17 @@ class NessusController:
                     headers=headers,
                     data=payload,
                     verify=VERIFY_SSL,
+                    timeout=REQUEST_TIMEOUT_SEC,
                 )
             elif method == "DELETE":
                 response = requests.delete(
-                    self.url + target, headers=headers, verify=VERIFY_SSL
+                    self.url + target,
+                    headers=headers,
+                    verify=VERIFY_SSL,
+                    timeout=REQUEST_TIMEOUT_SEC,
                 )
+            else:
+                raise ValueError(f"Unknown HTTP method: {method}")
 
             if response.status_code == OK_STATUS:
                 if target == LOGIN and method == "POST":
@@ -186,7 +200,7 @@ class NessusController:
         LOGGER.critical("Maximum retry attempts reached without success.")
         sys.exit(num_retries)
 
-    def find_policy(self, policy_name):
+    def find_policy(self, policy_name: str) -> Any:
         """Attempt to grab the policy ID for a name."""
         policies = self.policy_list()
         if policies.get("policies"):
@@ -198,7 +212,7 @@ class NessusController:
 
         raise Warning("No policies found in list")
 
-    def policy_list(self):
+    def policy_list(self) -> Any:
         """Return the list of all policies from the Nessus server."""
         response = self.__make_request(POLICY_BASE, "GET")
         if response.status_code == OK_STATUS and response.json().get(
@@ -208,16 +222,17 @@ class NessusController:
 
         raise Warning(f"Policy list failed; response={response.text}")
 
-    def policy_details(self, policy_id):
+    def policy_details(self, policy_id: Any) -> Any:
         """Return the full details for the given policy ID."""
         response = self.__make_request(
+            POLICY_DETAILS.format(policy_id=policy_id), "GET"
         )
         if response.status_code == OK_STATUS and response.json().get("uuid"):
             return response.json()
 
         raise Warning(f"Get policy details failed; response={response.text}")
 
-    def policy_create(self, policy_details):
+    def policy_create(self, policy_details: Any) -> Any:
         """Create a new policy and return its details."""
         response = self.__make_request(POLICY_BASE, "POST", policy_details)
         if response.status_code == OK_STATUS and response.json().get(
@@ -227,7 +242,7 @@ class NessusController:
 
         raise Warning(f"Policy creation failed; response={response.text}")
 
-    def policy_copy(self, policy_id):
+    def policy_copy(self, policy_id: Any) -> Any:
         """Copy an existing policy and return the new policy details."""
         response = self.__make_request(
             POLICY_COPY.format(policy_id=policy_id), "POST"
@@ -237,7 +252,7 @@ class NessusController:
 
         raise Warning(f"Policy copy failed; response={response.text}")
 
-    def policy_edit(self, policy_id, policy_details):
+    def policy_edit(self, policy_id: Any, policy_details: Any) -> Any:
         """Edit an existing policy with the provided details."""
         response = self.__make_request(
             POLICY_EDIT.format(policy_id=policy_id), "PUT", policy_details
@@ -247,7 +262,7 @@ class NessusController:
 
         raise Warning(f"Policy edit failed; response={response.text}")
 
-    def policy_delete(self, policy_id):
+    def policy_delete(self, policy_id: Any) -> Any:
         """Delete the policy with the given ID."""
         response = self.__make_request(
             POLICY_DELETE.format(policy_id=policy_id), "DELETE"
@@ -257,7 +272,9 @@ class NessusController:
 
         raise Warning(f"Policy delete failed; response={response.text}")
 
-    def scan_new(self, targets, policy_id, scan_name, template_uuid):
+    def scan_new(
+        self, targets: str, policy_id: Any, scan_name: str, template_uuid: Any
+    ) -> Any:
         """Create a new scan with the given targets, policy, name, and template."""
         scan_details = dict()
         scan_details["uuid"] = template_uuid
@@ -272,7 +289,7 @@ class NessusController:
 
         raise Warning(f"Scan creation failed; response={response.text}")
 
-    def scan_launch(self, scan_id):
+    def scan_launch(self, scan_id: Any) -> Any:
         """Launch the scan with the given ID and return the scan UUID."""
         response = self.__make_request(
             SCAN_LAUNCH.format(scan_id=scan_id), "POST"
@@ -284,7 +301,7 @@ class NessusController:
 
         raise Warning(f"Scan launch failed; response={response.text}")
 
-    def scan_details(self, scan_id):
+    def scan_details(self, scan_id: Any) -> Any:
         """Retrieve details for the scan with the given ID."""
         response = self.__make_request(
             SCAN_DETAILS.format(scan_id=scan_id), "GET"
@@ -299,12 +316,12 @@ class NessusController:
 
         raise Warning(f"Get scan details failed; response={response.text}")
 
-    def scan_status(self, scan_id):
+    def scan_status(self, scan_id: Any) -> Any:
         """Return the current status string for the given scan."""
         scan_details = self.scan_details(scan_id)
         return scan_details["info"]["status"]
 
-    def scan_delete(self, scan_id):
+    def scan_delete(self, scan_id: Any) -> Any:
         """Delete the scan with the given ID."""
         response = self.__make_request(
             SCAN_DELETE.format(scan_id=scan_id), "DELETE"
@@ -314,7 +331,7 @@ class NessusController:
 
         raise Warning(f"Scan delete failed; response={response.text}")
 
-    def report_ready(self, scan_id, file_id):
+    def report_ready(self, scan_id: Any, file_id: Any) -> Any:
         """Return True if the report for the given scan and file ID is ready."""
         response = self.__make_request(
             REPORT_STATUS.format(scan_id=scan_id, file_id=file_id), "GET"
@@ -324,7 +341,7 @@ class NessusController:
 
         raise Warning(f"Unable to retrieve report: response={response.text}")
 
-    def report_download(self, scan_id):
+    def report_download(self, scan_id: Any) -> Any:
         """Export and download the Nessus report for the given scan ID."""
         response = self.__make_request(
             REPORT_EXPORT.format(scan_id=scan_id), "POST", {"format": "nessus"}
@@ -350,7 +367,7 @@ class NessusController:
 
         raise Warning(f"Scan report export failed; response={response.text}")
 
-    def destroy_session(self):
+    def destroy_session(self) -> Any:
         """Destroy the current Nessus API session."""
         response = self.__make_request(LOGIN, "DELETE")
         if response.status_code == OK_STATUS:
@@ -359,7 +376,7 @@ class NessusController:
         raise Warning(f"Session destruction failed; response={response.text}")
 
 
-def main():
+def main() -> None:
     """Run the Nessus vulnerability scan job."""
     setup_logging()
     LOGGER.info("Nessus job starting")

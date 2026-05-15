@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 # Third-party libraries
 import numpy as np
+from beanie import SortDirection
 from cyhy_db.models import HostDoc, VulnScanDoc
 from cyhy_logging import CYHY_ROOT_LOGGER
 
@@ -129,7 +130,7 @@ async def _calculate_priority(host: HostDoc) -> int:
             VulnScanDoc.ip == host.ip,
             VulnScanDoc.latest == True,  # noqa: E712
         )
-        .sort([("severity", -1)])
+        .sort([("severity", SortDirection.DESCENDING)])
         .limit(1)
         .first_or_none()
     )

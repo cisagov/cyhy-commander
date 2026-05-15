@@ -90,8 +90,8 @@ class CommanderConfig(BaseModel):
     keep_successes: bool = False
     shutdown_when_idle: bool = False
     log_level: str = "INFO"
-    job_sizing: JobSizingConfig = Field(default_factory=JobSizingConfig)
+    job_sizing: JobSizingConfig = Field(default_factory=JobSizingConfig)  # type: ignore[arg-type]
     scanner_reliability: ScannerReliabilityConfig = Field(
-        default_factory=ScannerReliabilityConfig
+        default_factory=ScannerReliabilityConfig  # type: ignore[arg-type]
     )
-    timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
+    timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)  # type: ignore[arg-type]

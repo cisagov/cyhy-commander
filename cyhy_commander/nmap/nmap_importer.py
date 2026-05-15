@@ -11,15 +11,16 @@ Requirements: FR-1.4, MR-2.8, AC-5.1, AC-5.2
 # Standard Python Libraries
 import logging
 from ipaddress import IPv4Address
-from xml.sax import parse
+from typing import Any, cast
 
 # Third-party libraries
-import netaddr
+import netaddr  # type: ignore[import-untyped]
 
 # cyhy-db models and enums
 from cyhy_db.models import HostDoc, HostScanDoc, PortScanDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol, Stage
 from cyhy_logging import CYHY_ROOT_LOGGER
+from defusedxml.sax import parse  # type: ignore[import-untyped]
 
 # Local modules
 from .. import db_ops
@@ -66,31 +67,33 @@ class NmapImporter:
 
     SOURCE = "nmap"
 
-    def __init__(self, stage=Stage.PORTSCAN):
+    def __init__(self, stage: Stage = Stage.PORTSCAN) -> None:
         """Initialize the importer for the given scan stage."""
         self.__logger = logging.getLogger(
             CYHY_ROOT_LOGGER + ".commander.nmap_importer"
         )
         if stage in (Stage.NETSCAN1, Stage.NETSCAN2):
-            self.__ticket_manager = IPTicketManager()
+            self.__ticket_manager: IPTicketManager | IPPortTicketManager = (
+                IPTicketManager()
+            )
         elif stage == Stage.PORTSCAN:
             self.__ticket_manager = IPPortTicketManager()
         else:
             raise ValueError(f"Unsupported stage for NmapImporter: {stage}")
         self.__stage = stage
         # Parsed hosts collected during SAX parsing for async processing
-        self.__parsed_hosts: list[dict] = []
+        self.__parsed_hosts: list[dict[str, Any]] = []
         self.__parse_ended: bool = False
 
-    def __host_callback(self, parsed_host):
+    def __host_callback(self, parsed_host: dict[str, Any]) -> None:
         """SAX callback: collect parsed host data for async processing."""
         self.__parsed_hosts.append(parsed_host)
 
-    def __end_callback(self):
+    def __end_callback(self) -> None:
         """SAX callback: mark end of parse."""
         self.__parse_ended = True
 
-    async def process(self, nmap_filename, target_filename):
+    async def process(self, nmap_filename: str, target_filename: str) -> None:
         """Import nmap files created from netscans and portscans."""
         # Reset state for this parse run
         self.__parsed_hosts = []
@@ -113,7 +116,7 @@ class NmapImporter:
         elif self.__stage == Stage.PORTSCAN:
             await self.__process_portscan_hosts()
 
-    async def __process_netscan_hosts(self):
+    async def __process_netscan_hosts(self) -> None:
         """Process all parsed hosts from a netscan asynchronously."""
         ips_to_reset_latest: list[str] = []
 
@@ -141,12 +144,14 @@ class NmapImporter:
 
             # Close host-level tickets for all down hosts
             for ip_str in ips_to_reset_latest:
-                await self.__ticket_manager.process_tickets(
+                await cast(
+                    IPTicketManager, self.__ticket_manager
+                ).process_tickets(
                     ip=ip_str,
                     is_up=False,
                 )
 
-    async def __process_portscan_hosts(self):
+    async def __process_portscan_hosts(self) -> None:
         """Process all parsed hosts from a portscan asynchronously."""
         for parsed_host in self.__parsed_hosts:
             ip = parsed_host["addr"]
@@ -169,13 +174,17 @@ class NmapImporter:
             )
 
             # Process port tickets for this host (full scan)
-            await self.__ticket_manager.process_tickets(
+            await cast(
+                IPPortTicketManager, self.__ticket_manager
+            ).process_tickets(
                 ip=ip_str,
                 open_ports=open_port_docs,
                 is_full_scan=True,
             )
 
-    async def __store_port_details(self, parsed_host) -> list[PortScanDoc]:
+    async def __store_port_details(
+        self, parsed_host: dict[str, Any]
+    ) -> list[PortScanDoc]:
         """Store PortScanDoc records for each open port on the host.
 
         Returns a list of PortScanDoc objects for open ports.
@@ -243,7 +252,7 @@ class NmapImporter:
 
         return open_port_docs
 
-    async def __store_os_details(self, parsed_host):
+    async def __store_os_details(self, parsed_host: dict[str, Any]) -> None:
         """Store a HostScanDoc record for the host's OS detection results."""
         ip = parsed_host["addr"]
         ip_addr = IPv4Address(str(ip))

@@ -18,9 +18,10 @@ import time
 import traceback
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
+from typing import Any, cast
 
 import cyhy_db
-from cyhy_config import get_config
+from cyhy_config import get_config  # type: ignore[import-not-found]
 from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER, setup_logging
 
@@ -74,63 +75,59 @@ class Commander:
         self.__all_hosts_idle = False
         self.__config = config
         self.__db = None
-        self.__failed_job_queue = None
-        self.__failure_sinks = []
-        self.__host_exceptions = defaultdict(int)
-        self.__hosts_on_cooldown = []
+        self.__failed_job_queue: asyncio.Queue[str] | None = None
+        self.__failure_sinks: list[Any] = []
+        self.__host_exceptions: defaultdict[str, int] = defaultdict(int)
+        self.__hosts_on_cooldown: list[dict[str, Any]] = []
         self.__is_running = True
         self.__keep_failures = config.keep_failures
         self.__keep_successes = config.keep_successes
         self.__log_output_sleep_duration = 10
-        self.__nessus_sources = []
+        self.__nessus_sources: list[Any] = []
         self.__next_scan_limit = config.next_scan_limit
-        self.__nmap_sources = []
+        self.__nmap_sources: list[Any] = []
         self.__setup_directories()
         self.__shutdown_when_idle = config.shutdown_when_idle
-        self.__success_sinks = []
-        self.__successful_job_queue = None
+        self.__success_sinks: list[Any] = []
+        self.__successful_job_queue: asyncio.Queue[str] | None = None
         self.__test_mode = config.test_mode
 
         # New SSH transport (Fabric replacement)
         self.__ssh = ssh_transport.SSHTransport(self.__logger)
 
-    def __setup_directories(self):
+    def __setup_directories(self) -> None:
         for directory in (SUCCESS_DIR, PUSHED_DIR, FAILED_DIR):
             path = Path(directory)
             if not path.exists():
                 self.__logger.info('Creating directory "%s".' % (directory))
                 path.mkdir(parents=True)
 
-    def __setup_sources(self):
+    def __setup_sources(self) -> None:
         if self.__test_mode:
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    SLEEP_JOB_FILE,
-                    self.__db,
+                    str(SLEEP_JOB_FILE),
                     job_type=Stage.NETSCAN1,
                     count=self.__config.job_sizing.netscan1,
                 )
             )
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    SLEEP_JOB_FILE,
-                    self.__db,
+                    str(SLEEP_JOB_FILE),
                     job_type=Stage.NETSCAN2,
                     count=self.__config.job_sizing.netscan2,
                 )
             )
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    SLEEP_JOB_FILE,
-                    self.__db,
+                    str(SLEEP_JOB_FILE),
                     job_type=Stage.PORTSCAN,
                     count=self.__config.job_sizing.portscan,
                 )
             )
             self.__nessus_sources.append(
                 DatabaseJobSource(
-                    SLEEP_JOB_FILE,
-                    self.__db,
+                    str(SLEEP_JOB_FILE),
                     job_type=Stage.VULNSCAN,
                     count=self.__config.job_sizing.vulnscan,
                 )
@@ -139,38 +136,34 @@ class Commander:
             self.__nessus_sources.append(DirectoryJobSource(DROP_DIR))
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    NETSCAN1_JOB_FILE,
-                    self.__db,
+                    str(NETSCAN1_JOB_FILE),
                     job_type=Stage.NETSCAN1,
                     count=self.__config.job_sizing.netscan1,
                 )
             )
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    NETSCAN2_JOB_FILE,
-                    self.__db,
+                    str(NETSCAN2_JOB_FILE),
                     job_type=Stage.NETSCAN2,
                     count=self.__config.job_sizing.netscan2,
                 )
             )
             self.__nmap_sources.append(
                 DatabaseJobSource(
-                    PORTSCAN_JOB_FILE,
-                    self.__db,
+                    str(PORTSCAN_JOB_FILE),
                     job_type=Stage.PORTSCAN,
                     count=self.__config.job_sizing.portscan,
                 )
             )
             self.__nessus_sources.append(
                 DatabaseJobSource(
-                    VULNSCAN_JOB_FILE,
-                    self.__db,
+                    str(VULNSCAN_JOB_FILE),
                     job_type=Stage.VULNSCAN,
                     count=self.__config.job_sizing.vulnscan,
                 )
             )
 
-    def __setup_sinks(self):
+    def __setup_sinks(self) -> None:
         if self.__test_mode:
             noop_sink = NoOpSink()
             self.__success_sinks.append(noop_sink)
@@ -279,9 +272,11 @@ class Commander:
                     )
 
                 if dest_dir == SUCCESS_DIR:
-                    self.__successful_job_queue.put_nowait(local_job_dir)
+                    if self.__successful_job_queue is not None:
+                        self.__successful_job_queue.put_nowait(local_job_dir)
                 else:
-                    self.__failed_job_queue.put_nowait(local_job_dir)
+                    if self.__failed_job_queue is not None:
+                        self.__failed_job_queue.put_nowait(local_job_dir)
 
         except Exception as e:
             self.__logger.error(
@@ -290,7 +285,7 @@ class Commander:
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
 
-    async def __running_job_count(self, host: str):
+    async def __running_job_count(self, host: str) -> int | None:
         try:
             cp = await asyncio.to_thread(
                 self.__ssh.run, host, f"ls {shlex.quote(RUNNING_DIR)}"
@@ -359,14 +354,14 @@ class Commander:
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
 
-    def __unique_filename(self, path):
+    def __unique_filename(self, path: str) -> str:
         p = Path(path)
         if not p.exists():
             return str(p)
         new_name = "%s.%d" % (p.name, int(time.time() * 1000000))
         return str(p.with_name(new_name))
 
-    def __move_to_pushed(self, job_path):
+    def __move_to_pushed(self, job_path: str) -> None:
         if not self.__test_mode:
             shutil.rmtree(job_path)
             self.__logger.info("%s deleted" % job_path)
@@ -376,7 +371,7 @@ class Commander:
             shutil.move(job_path, dest)
             self.__logger.info("{} moved locally to {}".format(job_path, dest))
 
-    def __lowest_host(self, counts):
+    def __lowest_host(self, counts: dict[str, int]) -> str | None:
         lowest_count = None
         lowest_host = None
         for host, count in counts.items():
@@ -387,7 +382,7 @@ class Commander:
                 lowest_count = count
         return lowest_host
 
-    def __job_from_sources(self, sources):
+    def __job_from_sources(self, sources: list[Any]) -> str | None:
         job = None
         if RANDOMIZE_SOURCES:
             random.shuffle(sources)
@@ -401,11 +396,15 @@ class Commander:
         return job
 
     async def __fill_hosts(
-        self, counts, sources, workgroup_name, jobs_per_host
-    ):
+        self,
+        counts: dict[str, int],
+        sources: list[Any],
+        workgroup_name: str,
+        jobs_per_host: int,
+    ) -> None:
         while True:
             lowest_host = self.__lowest_host(counts)
-            if counts[lowest_host] >= jobs_per_host:
+            if lowest_host is None or counts[lowest_host] >= jobs_per_host:
                 self.__logger.debug("All %s hosts are full" % workgroup_name)
                 break  # everyone is full
             job_path = self.__job_from_sources(sources)
@@ -415,6 +414,8 @@ class Commander:
                     % workgroup_name
                 )
                 break  # no more work to do
+            if lowest_host is None:
+                break
             await self.__push_job(lowest_host, job_path)
             counts[lowest_host] += 1
 
@@ -465,6 +466,11 @@ class Commander:
                     self.__logger.info("%s deleted", job_path)
                 return
         self.__logger.warning("No handler was able to process %s", job_path)
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Return the commander logger."""
+        return self.__logger
 
     def handle_term(self) -> None:
         """Graceful shutdown callback for loop.add_signal_handler().
@@ -622,6 +628,11 @@ class Commander:
 
     async def __process_completed_jobs(self) -> None:
         """Process all jobs currently in the success and failure queues."""
+        if (
+            self.__successful_job_queue is None
+            or self.__failed_job_queue is None
+        ):
+            return
         tasks = []
         while not self.__successful_job_queue.empty():
             job_path = self.__successful_job_queue.get_nowait()
@@ -636,7 +647,9 @@ class Commander:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    def __check_cooldowns(self, nmap_hosts: list, nessus_hosts: list) -> None:
+    def __check_cooldowns(
+        self, nmap_hosts: list[str], nessus_hosts: list[str]
+    ) -> None:
         """Check for hosts coming off cooldown and restore them to rotation."""
         cooldown_duration = (
             self.__config.scanner_reliability.cooldown_duration_minutes * 60
@@ -664,7 +677,9 @@ class Commander:
                     ),
                 )
 
-    def __check_all_idle(self, nmap_hosts: list, nessus_hosts: list) -> None:
+    def __check_all_idle(
+        self, nmap_hosts: list[str], nessus_hosts: list[str]
+    ) -> None:
         """Check if all hosts are idle and handle shutdown_when_idle.
 
         This is a simplified check; tasks 5.2/5.3 will refine with actual
@@ -689,7 +704,7 @@ def load_config() -> CommanderConfig:
     Raises:
         Exception: If no configuration file is found or validation fails.
     """
-    return get_config(model=CommanderConfig)
+    return cast(CommanderConfig, get_config(model=CommanderConfig))
 
 
 async def _async_main(args: argparse.Namespace) -> None:
@@ -710,7 +725,7 @@ async def _async_main(args: argparse.Namespace) -> None:
 
     # Initialize database connection.
     await cyhy_db.initialize_db(config.mongodb_uri, config.mongodb_database)
-    commander._Commander__logger.info("Database initialized.")
+    commander.logger.info("Database initialized.")
 
     # Ensure the default owner RequestDoc exists.
     await db_ops.setup_default_owner()

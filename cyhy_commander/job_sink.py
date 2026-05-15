@@ -13,7 +13,7 @@ import os
 import random
 
 # Third-party libraries
-import netaddr
+import netaddr  # type: ignore[import-untyped]
 from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER
 
@@ -135,7 +135,7 @@ class NoOpSink:
             for ip_line in f:
                 ip = str(netaddr.IPAddress(ip_line.strip()))
                 if random_up_downs:
-                    up = random.choice([True, False])
+                    up = random.choice([True, False])  # nosec B311
                     reason = "syn-ack" if up else "no-response"
                     await db_ops.transition_host(ip, up=up, reason=reason)
                 else:

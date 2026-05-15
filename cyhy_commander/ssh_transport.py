@@ -2,7 +2,7 @@
 
 import os
 import shlex
-import subprocess
+import subprocess  # nosec B404
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -92,7 +92,7 @@ class SSHTransport:
         )
         argv = self._ssh_base(host) + [remote_command]
         self._logger.debug("SSH run: %s", shlex.join(argv))
-        return subprocess.run(
+        return subprocess.run(  # nosec B603
             argv,
             text=True,
             capture_output=True,
@@ -122,7 +122,7 @@ class SSHTransport:
         argv = self._rsync_common() + [src, dst]
         self._logger.debug("rsync pull: %s", shlex.join(argv))
 
-        cp = subprocess.run(
+        cp = subprocess.run(  # nosec B603
             argv,
             text=True,
             capture_output=True,
@@ -162,7 +162,7 @@ class SSHTransport:
         argv = self._rsync_common() + ["--mkpath", src, dst]
         self._logger.debug("rsync push: %s", shlex.join(argv))
 
-        cp = subprocess.run(
+        cp = subprocess.run(  # nosec B603
             argv,
             text=True,
             capture_output=True,

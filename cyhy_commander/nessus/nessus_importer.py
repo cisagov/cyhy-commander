@@ -12,15 +12,16 @@ Requirements: FR-1.4, MR-2.8, AC-5.3
 import logging
 from datetime import datetime, timezone
 from ipaddress import IPv4Address
-from xml.sax import parse
+from typing import Any
 
 # Third-party libraries
-import netaddr
+import netaddr  # type: ignore[import-untyped]
 
 # cyhy-db models and enums
 from cyhy_db.models import HostDoc, VulnScanDoc
 from cyhy_db.models.enum import Protocol
 from cyhy_logging import CYHY_ROOT_LOGGER
+from defusedxml.sax import parse  # type: ignore[import-untyped]
 
 # Local modules
 from .. import db_ops
@@ -86,9 +87,9 @@ class NessusImporter:
 
         # Collected parsed data for async processing
         # Each entry: dict with all parsedHost fields plus "_ip_str"
-        self._parsed_hosts: list[dict] = []
+        self._parsed_hosts: list[dict[str, Any]] = []
         # Each entry: dict with all parsedReport fields plus "_ip_str" and "_end_time"
-        self._parsed_reports: list[dict] = []
+        self._parsed_reports: list[dict[str, Any]] = []
 
         # Targets collected from the policy section
         self._targets: netaddr.IPSet | None = None
@@ -133,7 +134,7 @@ class NessusImporter:
         ports = set(_range_string_to_list(port_range_string))
         self.__logger.debug("Found %d ports in Nessus file", len(ports))
 
-    def _host_callback(self, parsedHost: dict) -> None:
+    def _host_callback(self, parsedHost: dict[str, Any]) -> None:
         """SAX callback: collect parsed host metadata and set current IP context."""
         # Some fragile hosts don't list their host_ip; fall back to name.
         if "host_ip" in parsedHost:
@@ -161,7 +162,7 @@ class NessusImporter:
 
         self._parsed_hosts.append(parsedHost)
 
-    def _report_callback(self, parsedReport: dict) -> None:
+    def _report_callback(self, parsedReport: dict[str, Any]) -> None:
         """SAX callback: collect parsed vulnerability report, tagged with current IP."""
         # Not storing severity 0 reports
         if parsedReport["severity"] == 0:
@@ -237,14 +238,14 @@ class NessusImporter:
             return
 
         # Build a lookup from IP string → parsed host metadata
-        host_meta: dict[str, dict] = {}
-        for parsed_host in self._parsed_hosts:
-            ip_str = parsed_host.get("_ip_str")
+        host_meta: dict[str, dict[str, Any]] = {}
+        for ph in self._parsed_hosts:
+            ip_str = ph.get("_ip_str")
             if ip_str:
-                host_meta[ip_str] = parsed_host
+                host_meta[ip_str] = ph
 
         # Group reports by IP address
-        reports_by_ip: dict[str, list[dict]] = {}
+        reports_by_ip: dict[str, list[dict[str, Any]]] = {}
         for report in self._parsed_reports:
             ip_str = report.get("_ip_str")
             if ip_str:
@@ -325,7 +326,7 @@ class NessusImporter:
 
     async def _store_vuln_report(
         self,
-        report: dict,
+        report: dict[str, Any],
         ip_addr: IPv4Address,
         owner: str,
         scan_time: datetime,

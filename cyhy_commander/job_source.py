@@ -13,6 +13,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 
+from beanie.operators import In
 from cyhy_db.models import HostDoc, PortScanDoc
 from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER
@@ -64,13 +65,13 @@ def _list_to_range_string(ports: list[int]) -> str:
 class JobSource:
     """Abstract base class for job sources."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the job source."""
         pass
 
-    def get_job(self):
+    def get_job(self) -> str | None:
         """Return the next job path, or False if none available."""
-        return False
+        return None
 
 
 class DirectoryJobSource(JobSource):
@@ -90,11 +91,11 @@ class DirectoryJobSource(JobSource):
         """Return a human-readable representation."""
         return "<DirectoryJobSource %s>" % (self.__directory)
 
-    def get_job(self):
+    def get_job(self) -> str | None:
         """Return the path to the next queued job directory, or None."""
         return self.__get_queued_job()
 
-    def __get_queued_job(self):
+    def __get_queued_job(self) -> str | None:
         jobs = os.listdir(self.__directory)
         if len(jobs) == 0:
             return None
@@ -132,11 +133,11 @@ class DatabaseJobSource(JobSource):
         """Return a human-readable representation."""
         return "<DatabaseJobSource %s>" % (self.__job_type)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Clean up the temporary directory on garbage collection."""
         shutil.rmtree(self.__temp_dir, ignore_errors=True)
 
-    def get_job(self):
+    def get_job(self) -> str | None:
         """Return the path to a newly created job directory, or None.
 
         Note: This method is synchronous but internally calls async helpers.
@@ -192,7 +193,7 @@ class DatabaseJobSource(JobSource):
         if self.__job_type == Stage.VULNSCAN:
             ip_list = [host.ip for host in hosts]
             open_ports = await PortScanDoc.find(
-                PortScanDoc.ip.in_(ip_list),
+                In(PortScanDoc.ip, ip_list),
                 PortScanDoc.latest == True,  # noqa: E712
                 PortScanDoc.state == "open",
             ).to_list()
