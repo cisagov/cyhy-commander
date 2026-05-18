@@ -1,0 +1,17 @@
+.git
+.github
+.hypothesis
+.mypy_cache
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+tests/
+done/
+failed/
+pushed/
+extras/
+.coverage
+.pre-commit-config.yaml
+.mdl_config.yaml
+.prettierignore
