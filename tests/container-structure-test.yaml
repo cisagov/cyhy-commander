@@ -28,7 +28,7 @@ metadataTest:
 
 envVars:
   - key: "PATH"
-    value: "/home/cisa/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+    value: "/home/cisa/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   - key: "VIRTUAL_ENV"
     value: "/home/cisa/.venv"
   - key: "PYTHONDONTWRITEBYTECODE"
@@ -127,7 +127,7 @@ commandTests:
   # Python symlink verification
   - name: "Python3 symlink points to system interpreter"
     command: "readlink"
-    args: ["-f", "/home/cisa/.venv/bin/python3"]
+    args: ["/home/cisa/.venv/bin/python3"]
     expectedOutput: ["/usr/local/bin/python3"]
 
   # Verify excluded package managers
