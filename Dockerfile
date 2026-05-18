@@ -4,16 +4,23 @@ ARG DEBIAN_CODENAME=trixie
 ARG UV_VERSION=0.7.12
 ARG SOURCE_DATE_EPOCH
 
+# Define uv image as a named stage so we can use the ARG in COPY --from
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 ###############################################################################
 # Compile stage - install production dependencies into a virtual environment
 ###############################################################################
 FROM docker.io/library/python:${PYTHON_VERSION}-slim-${DEBIAN_CODENAME} AS compile
 
-ARG UV_VERSION
 ARG SOURCE_DATE_EPOCH
 
-# Copy uv from the official image
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /usr/local/bin/uv
+# Copy uv from the named stage
+COPY --from=uv /uv /usr/local/bin/uv
+
+# Install git (required for fetching git-based dependencies)
+RUN apt-get update \
+    && apt-get install --no-install-recommends --no-install-suggests -y git \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set up the application home and create a virtual environment
 ENV CISA_HOME=/home/cisa
@@ -21,6 +28,9 @@ RUN python3 -m venv ${CISA_HOME}/.venv
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ${CISA_HOME}/
+
+# Set a fallback version for setuptools-scm since .git is excluded from build context
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.1
 
 # Install production dependencies into the virtual environment
 RUN VIRTUAL_ENV="${CISA_HOME}/.venv" \
