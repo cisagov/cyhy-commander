@@ -40,6 +40,38 @@ commented example.
 uv run cyhy-commander <working_dir>
 ```
 
+## Docker ##
+
+```bash
+# Build the container image
+docker build -t cyhy-commander .
+
+# Build with custom UID/GID
+docker build --build-arg CISA_UID=1001 --build-arg CISA_GID=1001 -t cyhy-commander .
+
+# Verify the image works
+docker run --rm cyhy-commander --help
+
+# Run with a working directory (mount as volume)
+docker run --rm -v ./work:/home/cisa/work cyhy-commander work
+```
+
+The image runs as an unprivileged user (`cisa`, UID 1000) and supports
+read-only root filesystems.  Mount writable paths as volumes for job working
+directories.
+
+For Kubernetes deployments, the image includes a probe script at
+`/home/cisa/scripts/healthcheck.sh` supporting liveness and readiness checks:
+
+```yaml
+livenessProbe:
+  exec:
+    command: ["/home/cisa/scripts/healthcheck.sh", "liveness"]
+readinessProbe:
+  exec:
+    command: ["/home/cisa/scripts/healthcheck.sh", "readiness"]
+```
+
 ## Development ##
 
 ```bash
