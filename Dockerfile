@@ -33,9 +33,9 @@ COPY pyproject.toml uv.lock ${CISA_HOME}/
 # Set a fallback version for setuptools-scm since .git is excluded from build context
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.1
 
-# Install production dependencies into the virtual environment
+# Install production dependencies and the project into the virtual environment
 RUN VIRTUAL_ENV="${CISA_HOME}/.venv" \
-    uv sync --frozen --no-cache --no-dev --project "${CISA_HOME}"
+    uv sync --frozen --no-cache --no-dev --no-install-project --project "${CISA_HOME}"
 
 # Set SOURCE_DATE_EPOCH for reproducible builds
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
@@ -82,12 +82,21 @@ RUN ln -sf /usr/local/bin/python3 ${CISA_HOME}/.venv/bin/python3
 ENV PATH="${CISA_HOME}/.venv/bin:$PATH"
 ENV VIRTUAL_ENV="${CISA_HOME}/.venv"
 
+# Add CISA_HOME to PYTHONPATH so the application package is importable
+ENV PYTHONPATH="${CISA_HOME}"
+
 # Set SOURCE_DATE_EPOCH from build ARG for reproducible timestamps at runtime
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 
 # Copy application source with correct ownership
 COPY --chown=${CISA_UID}:${CISA_GID} cyhy_commander/ ${CISA_HOME}/cyhy_commander/
 COPY --chown=${CISA_UID}:${CISA_GID} scripts/ ${CISA_HOME}/scripts/
+
+# Create the console script entry point
+RUN printf '#!/home/cisa/.venv/bin/python3\nimport sys\nfrom cyhy_commander.commander import cli_entry\nsys.exit(cli_entry())\n' \
+    > ${CISA_HOME}/.venv/bin/cyhy-commander \
+    && chmod 755 ${CISA_HOME}/.venv/bin/cyhy-commander \
+    && chown ${CISA_UID}:${CISA_GID} ${CISA_HOME}/.venv/bin/cyhy-commander
 
 # Set group-read and group-execute permissions for OpenShift arbitrary UID support
 RUN chmod -R g+rX ${CISA_HOME}/.venv ${CISA_HOME}/cyhy_commander ${CISA_HOME}/scripts
