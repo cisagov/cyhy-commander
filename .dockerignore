@@ -4,8 +4,8 @@
 .mypy_cache
 .pytest_cache
 .venv
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
 tests/
 done/
 failed/
