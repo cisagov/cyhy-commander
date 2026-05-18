@@ -25,7 +25,7 @@ RUN apt-get update \
 
 # Set up the application home and create a virtual environment
 ENV CISA_HOME=/home/cisa
-RUN python3 -m venv ${CISA_HOME}/.venv
+RUN python3 -m venv --without-pip ${CISA_HOME}/.venv
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ${CISA_HOME}/
