@@ -19,7 +19,8 @@ COPY --from=uv /uv /usr/local/bin/uv
 
 # Install git (required for fetching git-based dependencies)
 RUN apt-get update \
-    && apt-get install --no-install-recommends --no-install-suggests -y git \
+    && apt-get install --no-install-recommends --no-install-suggests -y \
+       git=1:2.47.3-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up the application home and create a virtual environment

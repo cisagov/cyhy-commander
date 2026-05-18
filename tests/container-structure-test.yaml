@@ -1,0 +1,148 @@
+# Container Structure Tests for cyhy-commander
+# Run with: container-structure-test test --image <image> --config tests/container-structure-test.yaml
+#
+# Validates Requirements: 1.4, 1.5, 3.1, 3.2, 5.3, 5.4, 6.2, 6.3, 6.4, 6.5, 9.4, 9.5
+
+schemaVersion: "2.0.0"
+
+metadataTest:
+  labels:
+    - key: "org.opencontainers.image.authors"
+      value: "github@cisa.dhs.gov"
+    - key: "org.opencontainers.image.vendor"
+      value: "Cybersecurity and Infrastructure Security Agency"
+    - key: "org.opencontainers.image.title"
+      value: "cyhy-commander"
+    - key: "org.opencontainers.image.source"
+      value: "https://github.com/cisagov/cyhy-commander"
+  entrypoint: ["cyhy-commander"]
+  workdir: "/home/cisa"
+  user: "cisa:cisa"
+  env:
+    - key: "VIRTUAL_ENV"
+      value: "/home/cisa/.venv"
+    - key: "PYTHONDONTWRITEBYTECODE"
+      value: "1"
+    - key: "PYTHONUNBUFFERED"
+      value: "1"
+
+envVars:
+  - key: "PATH"
+    value: "/home/cisa/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+  - key: "VIRTUAL_ENV"
+    value: "/home/cisa/.venv"
+  - key: "PYTHONDONTWRITEBYTECODE"
+    value: "1"
+  - key: "PYTHONUNBUFFERED"
+    value: "1"
+
+fileExistenceTests:
+  # Virtual environment
+  - name: "Virtual environment directory exists"
+    path: "/home/cisa/.venv"
+    shouldExist: true
+    isDirectory: true
+
+  - name: "Virtual environment bin directory exists"
+    path: "/home/cisa/.venv/bin"
+    shouldExist: true
+    isDirectory: true
+
+  - name: "Python3 symlink exists in venv"
+    path: "/home/cisa/.venv/bin/python3"
+    shouldExist: true
+
+  - name: "cyhy-commander console script exists"
+    path: "/home/cisa/.venv/bin/cyhy-commander"
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+    uid: 1000
+    gid: 1000
+
+  # Probe script
+  - name: "Health check probe script exists"
+    path: "/home/cisa/scripts/healthcheck.sh"
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+    uid: 1000
+    gid: 1000
+
+  # Application code
+  - name: "Application package directory exists"
+    path: "/home/cisa/cyhy_commander"
+    shouldExist: true
+    isDirectory: true
+
+  - name: "Application __init__.py exists"
+    path: "/home/cisa/cyhy_commander/__init__.py"
+    shouldExist: true
+    uid: 1000
+    gid: 1000
+
+  # Excluded files should NOT be present
+  - name: "uv binary is not present"
+    path: "/usr/local/bin/uv"
+    shouldExist: false
+
+  - name: "pip is not present in venv"
+    path: "/home/cisa/.venv/bin/pip"
+    shouldExist: false
+
+  - name: ".git directory is not present"
+    path: "/home/cisa/.git"
+    shouldExist: false
+
+  - name: "tests directory is not present"
+    path: "/home/cisa/tests"
+    shouldExist: false
+
+  - name: "__pycache__ is not present in application"
+    path: "/home/cisa/cyhy_commander/__pycache__"
+    shouldExist: false
+
+  - name: "pyproject.toml is not present"
+    path: "/home/cisa/pyproject.toml"
+    shouldExist: false
+
+  - name: "uv.lock is not present"
+    path: "/home/cisa/uv.lock"
+    shouldExist: false
+
+commandTests:
+  # User/group configuration
+  - name: "cisa user exists with UID 1000"
+    command: "id"
+    args: ["-u", "cisa"]
+    expectedOutput: ["1000"]
+
+  - name: "cisa group exists with GID 1000"
+    command: "id"
+    args: ["-g", "cisa"]
+    expectedOutput: ["1000"]
+
+  - name: "Container runs as cisa user"
+    command: "whoami"
+    expectedOutput: ["cisa"]
+
+  # Python symlink verification
+  - name: "Python3 symlink points to system interpreter"
+    command: "readlink"
+    args: ["-f", "/home/cisa/.venv/bin/python3"]
+    expectedOutput: ["/usr/local/bin/python3"]
+
+  # Verify excluded package managers
+  - name: "pip is not installed"
+    command: "sh"
+    args: ["-c", "! command -v pip"]
+    exitCode: 0
+
+  - name: "uv is not installed"
+    command: "sh"
+    args: ["-c", "! command -v uv"]
+    exitCode: 0
+
+  # Verify application is importable
+  - name: "cyhy_commander package is importable"
+    command: "python3"
+    args: ["-c", "import cyhy_commander"]
+    exitCode: 0

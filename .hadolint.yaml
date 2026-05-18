@@ -1,0 +1,25 @@
+# Hadolint configuration for cyhy-commander Dockerfile
+# See: https://github.com/hadolint/hadolint#configure
+
+# Fail on warnings and above
+failure-threshold: warning
+
+# Rules to ignore for this project
+ignored:
+  # DL3008: Pin versions in apt-get install
+  # We DO pin versions, but hadolint sometimes flags the =version syntax
+  # when it can't resolve the package version. Our pinning is intentional.
+  # Keeping this enabled - we want to catch unpinned packages.
+
+  # DL3013: Pin versions in pip install
+  # We use uv sync --frozen with a lockfile, not pip install
+  - DL3013
+
+  # DL3042: Avoid cache directory with pip
+  # We use uv, not pip
+  - DL3042
+
+# Trusting registries for COPY --from
+trustedRegistries:
+  - docker.io
+  - ghcr.io
