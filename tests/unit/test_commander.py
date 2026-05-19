@@ -235,7 +235,7 @@ class TestDoneJobs:
         cmd._Commander__ssh = mock_ssh
 
         async def _run():
-            await cmd._Commander__done_jobs("scanner1")
+            await cmd._Commander__done_jobs("scanner1", "nmap")
             assert not cmd._Commander__successful_job_queue.empty()
 
         asyncio.run(_run())
@@ -259,7 +259,7 @@ class TestDoneJobs:
         cmd._Commander__ssh = mock_ssh
 
         async def _run():
-            await cmd._Commander__done_jobs("scanner1")
+            await cmd._Commander__done_jobs("scanner1", "nmap")
             assert not cmd._Commander__failed_job_queue.empty()
 
         asyncio.run(_run())
@@ -280,7 +280,7 @@ class TestRunningJobCount:
         cmd._Commander__ssh = mock_ssh
 
         async def _run():
-            count = await cmd._Commander__running_job_count("scanner1")
+            count = await cmd._Commander__running_job_count("scanner1", "nmap")
             assert count == 3
 
         asyncio.run(_run())
@@ -297,7 +297,7 @@ class TestRunningJobCount:
         cmd._Commander__ssh = mock_ssh
 
         async def _run():
-            count = await cmd._Commander__running_job_count("scanner1")
+            count = await cmd._Commander__running_job_count("scanner1", "nmap")
             assert count is None
 
         asyncio.run(_run())
@@ -323,7 +323,7 @@ class TestPushJob:
         cmd._Commander__ssh = mock_ssh
 
         async def _run():
-            await cmd._Commander__push_job("scanner1", str(job_dir))
+            await cmd._Commander__push_job("scanner1", str(job_dir), "nmap")
             mock_ssh.rsync_push_dir.assert_called_once()
             mock_ssh.run.assert_called_once()  # touch .ready
 

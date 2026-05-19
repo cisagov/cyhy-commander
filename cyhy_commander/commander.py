@@ -25,7 +25,7 @@ from cyhy_config import get_config
 from cyhy_db.models.enum import Stage
 from cyhy_logging import CYHY_ROOT_LOGGER, setup_logging
 
-from . import db_ops, ssh_transport
+from . import db_ops, metrics, ssh_transport
 from .config_model import CommanderConfig
 from .job_sink import NessusSink, NmapSink, NoOpSink, TryAgainSink
 from .job_source import DatabaseJobSource, DirectoryJobSource
@@ -177,7 +177,7 @@ class Commander:
             )
         self.__failure_sinks = [TryAgainSink()]
 
-    async def __done_jobs(self, host: str) -> None:
+    async def __done_jobs(self, host: str, workgroup: str) -> None:
         try:
             cp = await asyncio.to_thread(
                 self.__ssh.run, host, f"ls {shlex.quote(DONE_DIR)}"
@@ -226,8 +226,11 @@ class Commander:
 
                 if exit_code == "0":
                     dest_dir = SUCCESS_DIR
+                    metrics.inc_jobs_pulled(_job_stage, ip_count=1, success=True)
                 else:
                     dest_dir = FAILED_DIR
+                    metrics.inc_jobs_pulled(_job_stage, ip_count=1, success=False)
+                    metrics.inc_jobs_failed(_job_stage)
                     self.__logger.warning(
                         "%s had a non-zero exit code: %s",
                         job,
@@ -278,14 +281,19 @@ class Commander:
                     if self.__failed_job_queue is not None:
                         self.__failed_job_queue.put_nowait(local_job_dir)
 
+            # Mark scanner as up after successful SSH interaction.
+            metrics.set_scanner_status(host, workgroup, True)
+
         except Exception as e:
             self.__logger.error(
                 "Exception when retrieving done jobs from %s", host
             )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
+            metrics.inc_host_errors(host)
+            metrics.set_scanner_status(host, workgroup, False)
 
-    async def __running_job_count(self, host: str) -> int | None:
+    async def __running_job_count(self, host: str, workgroup: str) -> int | None:
         try:
             cp = await asyncio.to_thread(
                 self.__ssh.run, host, f"ls {shlex.quote(RUNNING_DIR)}"
@@ -306,9 +314,11 @@ class Commander:
             )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
+            metrics.inc_host_errors(host)
+            metrics.set_scanner_status(host, workgroup, False)
             return None
 
-    async def __push_job(self, host: str, job_path: str) -> None:
+    async def __push_job(self, host: str, job_path: str, workgroup: str) -> None:
         try:
             job_name = Path(job_path.rstrip("/")).name
             remote_job_dir = str(PurePosixPath(RUNNING_DIR) / job_name)
@@ -345,6 +355,10 @@ class Commander:
                 self.__host_exceptions[host] += 1
                 return
 
+            # Record successful push metrics.
+            metrics.inc_jobs_pushed(_job_stage, ip_count=1)
+            metrics.set_scanner_status(host, workgroup, True)
+
             self.__move_to_pushed(job_path)
 
         except Exception as e:
@@ -353,6 +367,8 @@ class Commander:
             )
             self.__logger.error(e)
             self.__host_exceptions[host] += 1
+            metrics.inc_host_errors(host)
+            metrics.set_scanner_status(host, workgroup, False)
 
     def __unique_filename(self, path: str) -> str:
         p = Path(path)
@@ -416,7 +432,7 @@ class Commander:
                 break  # no more work to do
             if lowest_host is None:
                 break
-            await self.__push_job(lowest_host, job_path)
+            await self.__push_job(lowest_host, job_path, workgroup_name)
             counts[lowest_host] += 1
 
     async def __process_successful_job(self, job_path: str) -> None:
@@ -527,7 +543,8 @@ class Commander:
 
         while self.__is_running:
             try:
-                cycle_start = asyncio.get_event_loop().time()
+                cycle_start = time.time()
+                _loop_start = asyncio.get_event_loop().time()
 
                 await self.__check_stop_file_async()
                 await self.__check_database_pause_async()
@@ -558,7 +575,12 @@ class Commander:
                 # Check idle shutdown.
                 self.__check_all_idle(nmap_hosts, nessus_hosts)
 
-                elapsed = asyncio.get_event_loop().time() - cycle_start
+                # Record metrics for the completed cycle.
+                cycle_duration = time.time() - cycle_start
+                metrics.observe_cycle_duration(cycle_duration)
+                metrics.record_cycle_completed()
+
+                elapsed = asyncio.get_event_loop().time() - _loop_start
                 sleep_time = max(0.0, config.poll_interval - elapsed)
                 if sleep_time > 0:
                     self.__logger.debug(
@@ -600,8 +622,8 @@ class Commander:
         configured limit.  SSH/rsync calls are wrapped with asyncio.to_thread()
         to avoid blocking the event loop.
         """
-        await self.__done_jobs(host)
-        count = await self.__running_job_count(host)
+        await self.__done_jobs(host, NMAP_WORKGROUP)
+        count = await self.__running_job_count(host, NMAP_WORKGROUP)
         if count is None:
             return
         counts = {host: count}
@@ -614,8 +636,8 @@ class Commander:
 
     async def __work_nessus_host(self, host: str) -> None:
         """Perform one work cycle for a single nessus scanner host."""
-        await self.__done_jobs(host)
-        count = await self.__running_job_count(host)
+        await self.__done_jobs(host, NESSUS_WORKGROUP)
+        count = await self.__running_job_count(host, NESSUS_WORKGROUP)
         if count is None:
             return
         counts = {host: count}
@@ -735,7 +757,13 @@ async def _async_main(args: argparse.Namespace) -> None:
     loop.add_signal_handler(signal.SIGTERM, commander.handle_term)
     loop.add_signal_handler(signal.SIGINT, commander.handle_term)
 
-    await commander.run()
+    # Start the metrics/health server before entering the work cycle.
+    metrics.start_server()
+
+    try:
+        await commander.run()
+    finally:
+        metrics.shutdown_server()
 
 
 def cli_entry() -> None:
