@@ -229,7 +229,7 @@ class _CommanderContext:
             p.start()
             self._patches.append(p)
 
-        self.commander = Commander(self.config, console_logging=True)
+        self.commander = Commander(self.config)
         # Manually set up empty queues (normally done in run() after __setup_sources)
         # We need these so __process_completed_jobs() doesn't fail
         self.commander._Commander__successful_job_queue = asyncio.Queue()
@@ -262,6 +262,17 @@ def mock_db_for_commander():
     """
     client = mongomock_motor.AsyncMongoMockClient()
     db = client["test_commander_db"]
+
+    # Patch mongomock's list_collection_names to accept the
+    # authorizedCollections kwarg that beanie/pymongo 4.x passes.
+    _orig = db.delegate.list_collection_names
+
+    def _patched(*args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        kwargs.pop("nameOnly", None)
+        return _orig(*args, **kwargs)
+
+    db.delegate.list_collection_names = _patched
 
     async def _init():
         await beanie.init_beanie(
