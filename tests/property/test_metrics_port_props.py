@@ -41,7 +41,10 @@ def test_out_of_range_port_values_return_default(port_value: int) -> None:
 @settings(max_examples=100)
 @given(
     raw_value=st.text(
-        alphabet=st.characters(blacklist_characters="\x00"),
+        alphabet=st.characters(
+            blacklist_characters="\x00",
+            blacklist_categories=("Cs",),  # Exclude surrogates (not valid in env vars)
+        ),
         min_size=1,
     ).filter(lambda s: not _is_valid_port_string(s))
 )
