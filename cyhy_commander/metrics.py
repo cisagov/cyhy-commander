@@ -7,9 +7,13 @@ environment variables, and the WSGI health/metrics application.
 
 import hmac
 import logging
+import math
 import os
+import socketserver
+import threading
 import time
 from typing import Any
+from wsgiref.simple_server import WSGIServer, make_server
 
 from cyhy_logging import CYHY_ROOT_LOGGER
 from prometheus_client import Counter, Gauge, Histogram, make_wsgi_app
@@ -94,6 +98,9 @@ _liveness_threshold: float = DEFAULT_LIVENESS_THRESHOLD
 _readiness_threshold: float = DEFAULT_READINESS_THRESHOLD
 _bearer_token: str | None = None
 
+_server: WSGIServer | None = None
+_server_thread: threading.Thread | None = None
+
 # ---------------------------------------------------------------------------
 # Prometheus WSGI app for /metrics endpoint
 # ---------------------------------------------------------------------------
@@ -151,7 +158,7 @@ def get_liveness_threshold() -> float:
         return DEFAULT_LIVENESS_THRESHOLD
     try:
         value = float(raw)
-    except ValueError:
+    except (ValueError, OverflowError):
         logger.warning(
             "Invalid CYHY_LIVENESS_THRESHOLD_SECONDS value %r "
             "(not numeric); using default %s",
@@ -159,11 +166,19 @@ def get_liveness_threshold() -> float:
             DEFAULT_LIVENESS_THRESHOLD,
         )
         return DEFAULT_LIVENESS_THRESHOLD
-    if value <= 0:
+    if not (value > 0):  # Catches <= 0, NaN, and -0.0
         logger.warning(
             "CYHY_LIVENESS_THRESHOLD_SECONDS value %s is not "
             "positive; using default %s",
-            value,
+            raw,
+            DEFAULT_LIVENESS_THRESHOLD,
+        )
+        return DEFAULT_LIVENESS_THRESHOLD
+    if math.isinf(value):
+        logger.warning(
+            "CYHY_LIVENESS_THRESHOLD_SECONDS value %r is infinite; "
+            "using default %s",
+            raw,
             DEFAULT_LIVENESS_THRESHOLD,
         )
         return DEFAULT_LIVENESS_THRESHOLD
@@ -350,3 +365,88 @@ def health_app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
     # All other paths return 404 with empty body
     start_response("404 Not Found", [("Content-Type", "text/plain")])
     return [b""]
+
+
+# ---------------------------------------------------------------------------
+# Threading WSGI Server
+# ---------------------------------------------------------------------------
+
+
+class _ThreadingWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
+    """A WSGI server that handles each request in a new thread."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+# ---------------------------------------------------------------------------
+# Server Lifecycle
+# ---------------------------------------------------------------------------
+
+
+def start_server() -> None:
+    """Start the metrics/health WSGI server in a daemon thread.
+
+    Binds to 0.0.0.0:<metrics_port>. If the port is in use, logs an
+    error and returns (degraded mode). Sets _server and _server_thread
+    module globals.
+    """
+    global _server, _server_thread, _bearer_token, _liveness_threshold, _readiness_threshold
+
+    # Load configuration from environment
+    port = get_metrics_port()
+    _liveness_threshold = get_liveness_threshold()
+    _readiness_threshold = get_readiness_threshold()
+    _bearer_token = get_bearer_token()
+
+    try:
+        _server = make_server("0.0.0.0", port, health_app, server_class=_ThreadingWSGIServer)
+    except OSError as exc:
+        logger.error(
+            "Failed to bind metrics server to 0.0.0.0:%d: %s. "
+            "Continuing in degraded mode without metrics exposition.",
+            port,
+            exc,
+        )
+        _server = None
+        _server_thread = None
+        return
+
+    def _serve() -> None:
+        """Run the WSGI server until shutdown is called."""
+        try:
+            _server.serve_forever()
+        except Exception:
+            logger.error(
+                "Metrics server encountered an unhandled exception. "
+                "Continuing in degraded mode without metrics exposition.",
+                exc_info=True,
+            )
+
+    _server_thread = threading.Thread(target=_serve, name="metrics-server", daemon=True)
+    _server_thread.start()
+    logger.info("Metrics server started on 0.0.0.0:%d", port)
+
+
+def shutdown_server() -> None:
+    """Shut down the WSGI server and join the thread (timeout 5s).
+
+    Called during graceful shutdown after the main coroutine returns.
+    """
+    global _server, _server_thread
+
+    if _server is not None:
+        _server.shutdown()
+
+    if _server_thread is not None:
+        _server_thread.join(timeout=5.0)
+        if _server_thread.is_alive():
+            logger.warning("Metrics server thread did not stop within 5 seconds")
+
+    _server = None
+    _server_thread = None
+
+
+def is_server_running() -> bool:
+    """Return True if the metrics server thread is alive."""
+    return _server_thread is not None and _server_thread.is_alive()
