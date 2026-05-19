@@ -1,15 +1,18 @@
 """Prometheus metrics and health probe server for cyhy-commander.
 
 This module defines all Prometheus metric singletons, module-level state
-for health probe evaluation, and configuration functions that read from
-environment variables.
+for health probe evaluation, configuration functions that read from
+environment variables, and the WSGI health/metrics application.
 """
 
+import hmac
 import logging
 import os
+import time
+from typing import Any
 
 from cyhy_logging import CYHY_ROOT_LOGGER
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram, make_wsgi_app
 
 logger = logging.getLogger(f"{CYHY_ROOT_LOGGER}.{__name__}")
 
@@ -90,6 +93,12 @@ _first_cycle_completed: bool = False
 _liveness_threshold: float = DEFAULT_LIVENESS_THRESHOLD
 _readiness_threshold: float = DEFAULT_READINESS_THRESHOLD
 _bearer_token: str | None = None
+
+# ---------------------------------------------------------------------------
+# Prometheus WSGI app for /metrics endpoint
+# ---------------------------------------------------------------------------
+
+_metrics_app = make_wsgi_app()
 
 
 # ---------------------------------------------------------------------------
@@ -213,3 +222,131 @@ def get_bearer_token() -> str | None:
             "consider using a longer token for security"
         )
     return raw
+
+
+# ---------------------------------------------------------------------------
+# Health check functions
+# ---------------------------------------------------------------------------
+
+
+def _check_liveness() -> tuple[int, str]:
+    """Evaluate liveness: return (status_code, body).
+
+    Returns 200 if:
+      - First cycle not yet completed (startup grace), OR
+      - (now - last_cycle_timestamp) < liveness_threshold
+    Returns 503 otherwise.
+    """
+    global _first_cycle_completed, _liveness_threshold
+
+    if not _first_cycle_completed:
+        return (200, "ok")
+
+    last_cycle = last_cycle_completed_timestamp_seconds._value.get()
+    elapsed = time.time() - last_cycle
+    if elapsed < _liveness_threshold:
+        return (200, "ok")
+    return (503, "work cycle stale")
+
+
+def _check_readiness() -> tuple[int, str]:
+    """Evaluate readiness: return (status_code, body).
+
+    Returns 200 if:
+      - last_db_success_timestamp > 0 AND
+      - (now - last_db_success_timestamp) < readiness_threshold
+    Returns 503 otherwise (including before first DB op).
+    """
+    global _readiness_threshold
+
+    last_db = last_db_success_timestamp_seconds._value.get()
+    if last_db == 0:
+        return (503, "database connection stale")
+
+    elapsed = time.time() - last_db
+    if elapsed < _readiness_threshold:
+        return (200, "ok")
+    return (503, "database connection stale")
+
+
+def _check_startup() -> tuple[int, str]:
+    """Evaluate startup: return (status_code, body).
+
+    Returns 200 if first_cycle_completed flag is True.
+    Returns 503 otherwise.
+    """
+    global _first_cycle_completed
+
+    if _first_cycle_completed:
+        return (200, "ok")
+    return (503, "first cycle not completed")
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+
+def _authenticate(environ: dict[str, Any]) -> bool:
+    """Validate Bearer token using hmac.compare_digest.
+
+    Returns True if no token is configured or if the provided token
+    matches the configured token. Returns False otherwise.
+    """
+    global _bearer_token
+
+    if _bearer_token is None:
+        return True
+
+    auth_header = environ.get("HTTP_AUTHORIZATION", "")
+    if not auth_header.startswith("Bearer "):
+        return False
+
+    provided_token = auth_header[7:]  # Strip "Bearer " prefix
+    return hmac.compare_digest(provided_token, _bearer_token)
+
+
+# ---------------------------------------------------------------------------
+# WSGI Application
+# ---------------------------------------------------------------------------
+
+
+def health_app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
+    """WSGI application routing requests to health/metrics handlers.
+
+    Routes:
+        GET /metrics  -> prometheus_client WSGI app (with optional auth)
+        GET /livez    -> liveness check
+        GET /readyz   -> readiness check
+        GET /startupz -> startup check
+        *             -> 404
+    """
+    path = environ.get("PATH_INFO", "")
+
+    if path == "/metrics":
+        if not _authenticate(environ):
+            start_response("401 Unauthorized", [("Content-Type", "text/plain")])
+            return [b""]
+        return list(_metrics_app(environ, start_response))
+
+    if path == "/livez":
+        status_code, body = _check_liveness()
+        status_str = f"{status_code} {'OK' if status_code == 200 else 'Service Unavailable'}"
+        start_response(status_str, [("Content-Type", "text/plain")])
+        return [body.encode("utf-8")]
+
+    if path == "/readyz":
+        status_code, body = _check_readiness()
+        status_str = f"{status_code} {'OK' if status_code == 200 else 'Service Unavailable'}"
+        start_response(status_str, [("Content-Type", "text/plain")])
+        return [body.encode("utf-8")]
+
+    if path == "/startupz":
+        status_code, body = _check_startup()
+        status_str = f"{status_code} {'OK' if status_code == 200 else 'Service Unavailable'}"
+        start_response(status_str, [("Content-Type", "text/plain")])
+        return [body.encode("utf-8")]
+
+    # All other paths return 404 with empty body
+    start_response("404 Not Found", [("Content-Type", "text/plain")])
+    return [b""]
