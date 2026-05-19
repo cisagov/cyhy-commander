@@ -27,6 +27,7 @@ from cyhy_db.models.enum import (
 )
 from cyhy_logging import CYHY_ROOT_LOGGER
 
+from . import metrics
 from .host_state_manager import DefaultHostStateManager
 from .scheduler import DefaultScheduler
 
@@ -105,6 +106,7 @@ async def fetch_ready_hosts(
     for host in hosts:
         host.status = Status.RUNNING
 
+    metrics.record_db_success()
     logger.debug(
         "Fetched %d READY hosts for stage %s (owner=%s)",
         len(hosts),
@@ -258,6 +260,7 @@ async def balance_ready_hosts() -> None:
         await HostDoc.find(In(HostDoc.ip, ip_list)).update(
             Set({HostDoc.status: Status.READY})  # type: ignore[no-untyped-call]
         )
+        metrics.record_db_success()
         logger.debug(
             "Moved %d WAITING hosts to READY for owner %s.",
             len(waiting_hosts),
@@ -298,6 +301,7 @@ async def check_host_next_scans() -> None:
         host.next_scan = None
         await host.save()
 
+    metrics.record_db_success()
     logger.debug(
         "Moved %d DONE hosts back to WAITING (next_scan elapsed).",
         len(done_hosts),
@@ -401,6 +405,8 @@ async def transition_host(
         new_stage=result.new_stage,
         new_status=result.new_status,
     )
+
+    metrics.record_db_success()
 
 
 async def _update_tally(
