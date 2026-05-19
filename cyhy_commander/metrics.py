@@ -450,3 +450,53 @@ def shutdown_server() -> None:
 def is_server_running() -> bool:
     """Return True if the metrics server thread is alive."""
     return _server_thread is not None and _server_thread.is_alive()
+
+
+# ---------------------------------------------------------------------------
+# Instrumentation Helpers
+# ---------------------------------------------------------------------------
+
+
+def observe_cycle_duration(duration_seconds: float) -> None:
+    """Record a work cycle duration in the histogram."""
+    work_cycle_duration_seconds.observe(duration_seconds)
+
+
+def record_cycle_completed() -> None:
+    """Set last_cycle_completed_timestamp to now; set first_cycle_completed flag."""
+    global _first_cycle_completed
+    last_cycle_completed_timestamp_seconds.set_to_current_time()
+    _first_cycle_completed = True
+
+
+def record_db_success() -> None:
+    """Set last_db_success_timestamp to now."""
+    last_db_success_timestamp_seconds.set_to_current_time()
+
+
+def inc_jobs_pushed(stage: str, ip_count: int = 1) -> None:
+    """Increment jobs_pushed_total and ips_pushed_total for the given stage."""
+    jobs_pushed_total.labels(stage=stage).inc()
+    ips_pushed_total.labels(stage=stage).inc(ip_count)
+
+
+def inc_jobs_pulled(stage: str, ip_count: int = 1, success: bool = True) -> None:
+    """Increment jobs_pulled_total and ips_pulled_total for the given stage/status."""
+    status = "success" if success else "failure"
+    jobs_pulled_total.labels(stage=stage).inc()
+    ips_pulled_total.labels(stage=stage, status=status).inc(ip_count)
+
+
+def inc_jobs_failed(stage: str) -> None:
+    """Increment jobs_failed_total for the given stage."""
+    jobs_failed_total.labels(stage=stage).inc()
+
+
+def inc_host_errors(host: str) -> None:
+    """Increment host_errors_total for the given host."""
+    host_errors_total.labels(host=host).inc()
+
+
+def set_scanner_status(host: str, workgroup: str, up: bool) -> None:
+    """Set scanner_connection_status gauge to 1 (up) or 0 (down)."""
+    scanner_connection_status.labels(host=host, workgroup=workgroup).set(1 if up else 0)
