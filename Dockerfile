@@ -101,21 +101,29 @@ RUN printf '#!/home/cisa/.venv/bin/python3\nimport sys\nfrom cyhy_commander.comm
 # Set group-read and group-execute permissions for OpenShift arbitrary UID support
 RUN chmod -R g+rX ${CISA_HOME}/.venv ${CISA_HOME}/cyhy_commander ${CISA_HOME}/scripts
 
+# Create /work directory for job file management with correct ownership and permissions
+RUN mkdir -p /work \
+    && chown ${CISA_UID}:${CISA_GID} /work \
+    && chmod 755 /work
+
 # OCI standard annotations
 LABEL org.opencontainers.image.authors="github@cisa.dhs.gov" \
       org.opencontainers.image.vendor="Cybersecurity and Infrastructure Security Agency" \
       org.opencontainers.image.title="cyhy-commander" \
       org.opencontainers.image.source="https://github.com/cisagov/cyhy-commander"
 
-# Set working directory
-WORKDIR ${CISA_HOME}
+# Expose metrics/health server port
+EXPOSE 9090
+
+# Set working directory to the job file management directory
+WORKDIR /work
 
 # Health check for Docker and Docker Compose environments
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-    CMD ["python3", "-c", "import cyhy_commander"]
+    CMD ["python3", "/home/cisa/scripts/healthcheck.py", "liveness"]
 
 # Run as unprivileged user
 USER ${CISA_USER}:${CISA_USER}
 
 # Application entrypoint in exec form
-ENTRYPOINT ["cyhy-commander"]
+ENTRYPOINT ["cyhy-commander", "/work"]
