@@ -41,6 +41,14 @@ def reset_metrics_state():
     metrics.last_cycle_completed_timestamp_seconds.set(0)
     metrics.last_db_success_timestamp_seconds.set(0)
 
+    # Clear counter label instances so tests start with fresh counters
+    metrics.jobs_pushed_total._metrics.clear()
+    metrics.jobs_pulled_total._metrics.clear()
+    metrics.jobs_failed_total._metrics.clear()
+    metrics.host_errors_total._metrics.clear()
+    metrics.ips_pushed_total._metrics.clear()
+    metrics.ips_pulled_total._metrics.clear()
+
     yield
 
     # Cleanup after test
