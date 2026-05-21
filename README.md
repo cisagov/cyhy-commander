@@ -244,8 +244,8 @@ subcommand).
 # Install with test and dev extras
 uv sync --extra test --extra dev
 
-# Run tests
-uv run pytest tests/unit tests/property
+# Run all tests (unit, property, and integration)
+uv run pytest
 
 # Run pre-commit hooks
 pre-commit run --all-files
