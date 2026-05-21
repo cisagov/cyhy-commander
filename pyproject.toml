@@ -85,6 +85,12 @@ ignore_errors = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# mongomock-motor's AsyncMockMixin creates coroutines that are never awaited
+# during pytest's log capture setup when pytest-asyncio auto mode is active.
+# This is harmless and internal to the mock library.
+filterwarnings = [
+    "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited:RuntimeWarning",
+]
 
 [tool.flake8]
 max-line-length = 80
