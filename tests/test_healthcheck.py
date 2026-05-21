@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 # Path to the healthcheck script
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "healthcheck.py"
@@ -204,3 +205,51 @@ class TestInvalidSubcommand:
         assert result.returncode == 2
         assert "liveness" in result.stderr
         assert "readiness" in result.stderr
+
+
+class TestInvalidSubcommandProperty:
+    """Property-based test for invalid healthcheck subcommand behavior.
+
+    Feature: observability-and-probes, Property 11: Invalid healthcheck subcommand produces usage error
+
+    Validates: Requirements 9.5
+    """
+
+    @settings(max_examples=100)
+    @given(
+        subcommand=st.text(
+            alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters="\x00"),
+        ).filter(lambda s: s not in ("liveness", "readiness")),
+    )
+    def test_invalid_subcommand_produces_usage_error(self, subcommand: str) -> None:
+        """Feature: observability-and-probes, Property 11: Invalid healthcheck subcommand produces usage error.
+
+        For any string argument not in {liveness, readiness}, the script exits
+        with code 2 and prints a usage message to stderr.
+
+        Validates: Requirements 9.5
+        """
+        port = _find_free_port()
+        result = _run_healthcheck(subcommand, port)
+        assert result.returncode == 2, (
+            f"Expected exit code 2 for invalid subcommand {subcommand!r}, got {result.returncode}"
+        )
+        assert "usage" in result.stderr.lower(), (
+            f"Expected usage message in stderr for subcommand {subcommand!r}, got: {result.stderr!r}"
+        )
+
+    def test_no_argument_produces_usage_error(self) -> None:
+        """Feature: observability-and-probes, Property 11: Invalid healthcheck subcommand produces usage error.
+
+        No argument (empty argv) also exits with code 2 and usage message.
+
+        Validates: Requirements 9.5
+        """
+        port = _find_free_port()
+        result = _run_healthcheck(None, port)
+        assert result.returncode == 2, (
+            f"Expected exit code 2 for no subcommand, got {result.returncode}"
+        )
+        assert "usage" in result.stderr.lower(), (
+            f"Expected usage message in stderr for no subcommand, got: {result.stderr!r}"
+        )
