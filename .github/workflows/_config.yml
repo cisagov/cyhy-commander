@@ -1,0 +1,30 @@
+---
+name: Config
+
+on:  # yamllint disable-line rule:truthy
+  workflow_call:
+    outputs:
+      image_name:
+        description: The container image name.
+        value: ${{ jobs.config.outputs.image_name }}
+      platforms:
+        description: The platforms to build for.
+        value: ${{ jobs.config.outputs.platforms }}
+      test_platforms:
+        description: The platforms to test on.
+        value: ${{ jobs.config.outputs.test_platforms }}
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      image_name: ${{ steps.set-outputs.outputs.image_name }}
+      platforms: ${{ steps.set-outputs.outputs.platforms }}
+      test_platforms: ${{ steps.set-outputs.outputs.test_platforms }}
+    steps:
+      - id: set-outputs
+        run: |
+          echo "image_name=${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo 'platforms=["linux/amd64","linux/arm64"]' >> $GITHUB_OUTPUT
+          echo 'test_platforms=["linux/amd64"]' >> $GITHUB_OUTPUT
