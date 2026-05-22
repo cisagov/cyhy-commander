@@ -8,6 +8,8 @@ T + cooldown_duration_minutes.
 **Validates: Requirements MR-8.6, AC-11.6**
 """
 
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from hypothesis import given, settings
@@ -27,7 +29,8 @@ def _make_commander(cooldown_minutes: int) -> Commander:
         test_mode=True,
     )
     config.scanner_reliability.cooldown_duration_minutes = cooldown_minutes
-    return Commander(config)
+    work_dir = Path(tempfile.mkdtemp())
+    return Commander(config, work_dir=work_dir)
 
 
 @given(

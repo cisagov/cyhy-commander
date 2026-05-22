@@ -137,21 +137,6 @@ def _make_mock_ssh() -> MagicMock:
     return mock
 
 
-def _make_commander_with_mock_ssh(
-    config: CommanderConfig, tmp_path: Path
-) -> tuple:
-    """Create a Commander instance with a mock SSH transport.
-
-    Returns (commander, mock_ssh).  The caller must be inside a patched
-    context for ssh_transport.SSHTransport.
-
-    Changes to tmp_path so Commander.__setup_directories() can create dirs.
-    """
-    mock_ssh = _make_mock_ssh()
-    orig_dir = os.getcwd()
-    os.chdir(tmp_path)
-    return mock_ssh, orig_dir
-
 
 # ---------------------------------------------------------------------------
 # Context manager for Commander setup
@@ -189,13 +174,9 @@ class _CommanderContext:
         self.mock_ssh = mock_ssh or _make_mock_ssh()
         self._check_side_effect = check_host_next_scans_side_effect
         self.commander: Commander | None = None
-        self._orig_dir: str | None = None
         self._patches: list = []
 
     def __enter__(self):
-        self._orig_dir = os.getcwd()
-        os.chdir(self.tmp_path)
-
         # Patch SSHTransport constructor to return our mock
         p_ssh = patch(
             "cyhy_commander.commander.ssh_transport.SSHTransport",
@@ -229,7 +210,7 @@ class _CommanderContext:
             p.start()
             self._patches.append(p)
 
-        self.commander = Commander(self.config)
+        self.commander = Commander(self.config, work_dir=self.tmp_path)
         # Manually set up empty queues (normally done in run() after __setup_sources)
         # We need these so __process_completed_jobs() doesn't fail
         self.commander._Commander__successful_job_queue = asyncio.Queue()
@@ -245,8 +226,6 @@ class _CommanderContext:
     def __exit__(self, *args):
         for p in reversed(self._patches):
             p.stop()
-        if self._orig_dir:
-            os.chdir(self._orig_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +584,7 @@ class TestStopFileShutdown:
 
                 async def _create_stop_file():
                     await asyncio.sleep(0.05)
-                    Path("stop").touch()
+                    (tmp_path / "stop").touch()
 
                 stop_task = asyncio.create_task(_create_stop_file())
                 await asyncio.wait_for(commander.run(), timeout=5.0)

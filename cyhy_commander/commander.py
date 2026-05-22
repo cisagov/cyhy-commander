@@ -67,10 +67,23 @@ NMAP_WORKGROUP = "nmap"
 class Commander:
     """Orchestrates scan jobs across scanner hosts."""
 
-    def __init__(self, config: CommanderConfig):
-        """Initialize the Commander with the given configuration."""
+    def __init__(self, config: CommanderConfig, work_dir: Path | None = None):
+        """Initialize the Commander with the given configuration.
+
+        Args:
+            config: Validated commander configuration.
+            work_dir: Base directory for local job file management
+                (done/, pushed/, failed/, drop/, stop file). Defaults to
+                the current working directory if not provided.
+        """
         # Set up logging first in order to log any errors as soon as possible.
         self.__logger = logging.getLogger(CYHY_ROOT_LOGGER + ".commander")
+
+        # Resolve work_dir to an absolute path so all local paths are stable
+        # regardless of later os.chdir calls.
+        self.__work_dir: Path = (
+            Path(work_dir).resolve() if work_dir else Path.cwd()
+        )
 
         self.__all_hosts_idle = False
         self.__config = config
@@ -97,9 +110,9 @@ class Commander:
 
     def __setup_directories(self) -> None:
         for directory in (SUCCESS_DIR, PUSHED_DIR, FAILED_DIR):
-            path = Path(directory)
+            path = self.__work_dir / directory
             if not path.exists():
-                self.__logger.info('Creating directory "%s".' % (directory))
+                self.__logger.info('Creating directory "%s".' % (path))
                 path.mkdir(parents=True)
 
     def __setup_sources(self) -> None:
@@ -133,7 +146,7 @@ class Commander:
                 )
             )
         else:
-            self.__nessus_sources.append(DirectoryJobSource(DROP_DIR))
+            self.__nessus_sources.append(DirectoryJobSource(str(self.__work_dir / DROP_DIR)))
             self.__nmap_sources.append(
                 DatabaseJobSource(
                     str(NETSCAN1_JOB_FILE),
@@ -238,7 +251,7 @@ class Commander:
                         extra={"host": host, "job": job, "stage": _job_stage},
                     )
 
-                local_job_dir = str(Path(dest_dir) / job)
+                local_job_dir = str(self.__work_dir / dest_dir / job)
                 await asyncio.to_thread(
                     self.__ssh.rsync_pull_dir,
                     host=host,
@@ -382,7 +395,7 @@ class Commander:
             shutil.rmtree(job_path)
             self.__logger.info("%s deleted" % job_path)
         else:
-            dest = str(Path(PUSHED_DIR) / Path(job_path).name)
+            dest = str(self.__work_dir / PUSHED_DIR / Path(job_path).name)
             dest = self.__unique_filename(dest)
             shutil.move(job_path, dest)
             self.__logger.info(f"{job_path} moved locally to {dest}")
@@ -601,11 +614,12 @@ class Commander:
 
     async def __check_stop_file_async(self) -> None:
         """Async version of stop file check."""
-        if Path(STOP_FILE).exists():
+        stop_path = self.__work_dir / STOP_FILE
+        if stop_path.exists():
             self.__logger.warning(
                 "Stop file found.  Shutting down after this work cycle completes."
             )
-            Path(STOP_FILE).unlink()
+            stop_path.unlink()
             self.__is_running = False
 
     async def __check_database_pause_async(self) -> None:
@@ -739,11 +753,10 @@ async def _async_main(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         workingDir.mkdir()
-    os.chdir(str(workingDir))
 
     config = load_config()
     setup_logging(log_level=config.log_level)
-    commander = Commander(config)
+    commander = Commander(config, work_dir=workingDir)
 
     # Initialize database connection.
     await cyhy_db.initialize_db(config.mongodb_uri, config.mongodb_database)

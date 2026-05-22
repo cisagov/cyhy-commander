@@ -1,7 +1,6 @@
 """Unit tests for Commander class."""
 
 import asyncio
-import os
 import subprocess
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -31,9 +30,8 @@ class TestCommanderInit:
     """Tests for Commander.__init__."""
 
     def test_init_sets_attributes(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         assert cmd._Commander__is_running is True
         assert cmd._Commander__test_mode is True
         assert cmd._Commander__keep_failures is False
@@ -42,14 +40,13 @@ class TestCommanderInit:
         assert cmd._Commander__next_scan_limit == 2000
 
     def test_init_custom_config(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(
             keep_failures=True,
             keep_successes=True,
             shutdown_when_idle=True,
             next_scan_limit=500,
         )
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         assert cmd._Commander__keep_failures is True
         assert cmd._Commander__keep_successes is True
         assert cmd._Commander__shutdown_when_idle is True
@@ -60,9 +57,8 @@ class TestSetupDirectories:
     """Tests for Commander.__setup_directories."""
 
     def test_creates_directories(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        Commander(config)
+        Commander(config, work_dir=tmp_path)
         assert (tmp_path / "done").exists()
         assert (tmp_path / "pushed").exists()
         assert (tmp_path / "failed").exists()
@@ -72,9 +68,8 @@ class TestSetupSources:
     """Tests for Commander.__setup_sources."""
 
     def test_test_mode_sources(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sources()
         # In test mode: 3 nmap sources (NETSCAN1, NETSCAN2, PORTSCAN)
         # + 1 nessus (VULNSCAN)
@@ -82,9 +77,8 @@ class TestSetupSources:
         assert len(cmd._Commander__nessus_sources) == 1
 
     def test_normal_mode_sources(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=False)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sources()
         # Normal mode: 3 nmap (DB) + 1 nessus (DirectoryJobSource + DatabaseJobSource)
         assert len(cmd._Commander__nmap_sources) == 3
@@ -95,18 +89,16 @@ class TestSetupSinks:
     """Tests for Commander.__setup_sinks."""
 
     def test_test_mode_sinks(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sinks()
         assert len(cmd._Commander__success_sinks) == 1
         assert "NoOpSink" in str(cmd._Commander__success_sinks[0])
         assert len(cmd._Commander__failure_sinks) == 1
 
     def test_normal_mode_sinks(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=False)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sinks()
         assert len(cmd._Commander__success_sinks) == 4
         assert len(cmd._Commander__failure_sinks) == 1
@@ -116,9 +108,8 @@ class TestHandleTerm:
     """Tests for Commander.handle_term."""
 
     def test_sets_is_running_false(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         assert cmd._Commander__is_running is True
         cmd.handle_term()
         assert cmd._Commander__is_running is False
@@ -128,18 +119,16 @@ class TestUniqueFilename:
     """Tests for Commander.__unique_filename."""
 
     def test_returns_path_if_not_exists(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         result = cmd._Commander__unique_filename(str(tmp_path / "nonexistent"))
         assert result == str(tmp_path / "nonexistent")
 
     def test_returns_timestamped_if_exists(self, tmp_path):
-        os.chdir(tmp_path)
         existing = tmp_path / "existing"
         existing.touch()
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         result = cmd._Commander__unique_filename(str(existing))
         assert result != str(existing)
         assert "existing." in result
@@ -149,9 +138,8 @@ class TestMoveToPushed:
     """Tests for Commander.__move_to_pushed."""
 
     def test_test_mode_moves_to_pushed(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         job_dir = tmp_path / "job1"
         job_dir.mkdir()
         (job_dir / "file.txt").write_text("data")
@@ -160,9 +148,8 @@ class TestMoveToPushed:
         assert (tmp_path / "pushed").exists()
 
     def test_normal_mode_deletes(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=False)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         job_dir = tmp_path / "job2"
         job_dir.mkdir()
         (job_dir / "file.txt").write_text("data")
@@ -174,16 +161,14 @@ class TestLowestHost:
     """Tests for Commander.__lowest_host."""
 
     def test_returns_lowest(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         counts = {"host1": 5, "host2": 2, "host3": 8}
         assert cmd._Commander__lowest_host(counts) == "host2"
 
     def test_returns_none_for_empty(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         assert cmd._Commander__lowest_host({}) is None
 
 
@@ -191,9 +176,8 @@ class TestJobFromSources:
     """Tests for Commander.__job_from_sources."""
 
     def test_returns_job_from_first_available(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         source1 = MagicMock()
         source1.get_job.return_value = None
         source2 = MagicMock()
@@ -203,9 +187,8 @@ class TestJobFromSources:
         assert result == "/path/to/job"
 
     def test_returns_none_when_no_jobs(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         source = MagicMock()
         source.get_job.return_value = None
         with patch("cyhy_commander.commander.RANDOMIZE_SOURCES", False):
@@ -217,9 +200,8 @@ class TestDoneJobs:
     """Tests for Commander.__done_jobs."""
 
     def test_done_jobs_success(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__successful_job_queue = asyncio.Queue()
         cmd._Commander__failed_job_queue = asyncio.Queue()
 
@@ -241,9 +223,8 @@ class TestDoneJobs:
         asyncio.run(_run())
 
     def test_done_jobs_failed_exit_code(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__successful_job_queue = asyncio.Queue()
         cmd._Commander__failed_job_queue = asyncio.Queue()
 
@@ -269,9 +250,8 @@ class TestRunningJobCount:
     """Tests for Commander.__running_job_count."""
 
     def test_returns_count(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         mock_ssh = MagicMock()
         mock_ssh.run.return_value = subprocess.CompletedProcess(
@@ -286,9 +266,8 @@ class TestRunningJobCount:
         asyncio.run(_run())
 
     def test_returns_none_on_error(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         mock_ssh = MagicMock()
         mock_ssh.run.return_value = subprocess.CompletedProcess(
@@ -307,9 +286,8 @@ class TestPushJob:
     """Tests for Commander.__push_job."""
 
     def test_push_job_success(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         job_dir = tmp_path / "NETSCAN1-test"
         job_dir.mkdir()
@@ -334,9 +312,8 @@ class TestFillHosts:
     """Tests for Commander.__fill_hosts."""
 
     def test_fill_hosts_fills_lowest(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         source = MagicMock()
         source.get_job.side_effect = ["/path/job1", "/path/job2", None]
@@ -360,9 +337,8 @@ class TestProcessJobs:
     """Tests for __process_successful_job and __process_failed_job."""
 
     def test_process_successful_job(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sinks()
 
         job_dir = tmp_path / "NETSCAN1-20260101"
@@ -380,9 +356,8 @@ class TestProcessJobs:
         asyncio.run(_run())
 
     def test_process_failed_job(self, tmp_path, mock_db):
-        os.chdir(tmp_path)
         config = _make_config(test_mode=True)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__setup_sinks()
 
         job_dir = tmp_path / "NETSCAN1-20260101"
@@ -404,9 +379,8 @@ class TestCheckCooldowns:
     """Tests for Commander.__check_cooldowns."""
 
     def test_host_restored_after_cooldown(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         # Put a host on cooldown that expired
         cmd._Commander__hosts_on_cooldown = [
             {
@@ -422,9 +396,8 @@ class TestCheckCooldowns:
         assert len(cmd._Commander__hosts_on_cooldown) == 0
 
     def test_host_stays_on_cooldown(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         cmd._Commander__hosts_on_cooldown = [
             {
                 "host": "scanner1",
@@ -443,9 +416,8 @@ class TestCheckStopFile:
     """Tests for Commander.__check_stop_file_async."""
 
     def test_stop_file_sets_not_running(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
         (tmp_path / "stop").touch()
 
         async def _run():
@@ -455,9 +427,8 @@ class TestCheckStopFile:
         asyncio.run(_run())
 
     def test_no_stop_file_keeps_running(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         async def _run():
             await cmd._Commander__check_stop_file_async()
@@ -470,9 +441,8 @@ class TestCheckDatabasePause:
     """Tests for Commander.__check_database_pause_async."""
 
     def test_no_pause(self, tmp_path):
-        os.chdir(tmp_path)
         config = _make_config()
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         async def _run():
             with patch(
@@ -491,9 +461,8 @@ class TestRunLoop:
 
     def test_run_single_iteration(self, tmp_path):
         """run() exits after one iteration when _is_running is set to False."""
-        os.chdir(tmp_path)
         config = _make_config(poll_interval=1)
-        cmd = Commander(config)
+        cmd = Commander(config, work_dir=tmp_path)
 
         call_count = 0
 
