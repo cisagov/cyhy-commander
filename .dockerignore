@@ -7,9 +7,6 @@
 **/__pycache__
 **/*.pyc
 tests/
-done/
-failed/
-pushed/
 extras/
 .coverage
 .pre-commit-config.yaml

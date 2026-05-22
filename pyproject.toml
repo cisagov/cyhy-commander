@@ -56,9 +56,6 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["cyhy_commander"]
 
-[tool.hatch.build.targets.wheel.shared-data]
-"cyhy_commander/jobs" = "cyhy_commander/jobs"
-
 [tool.black]
 line-length = 80
 target-version = ["py314"]
