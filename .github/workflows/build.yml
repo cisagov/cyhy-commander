@@ -1,0 +1,80 @@
+---
+name: Build
+
+on:  # yamllint disable-line rule:truthy
+  merge_group:
+    types:
+      - checks_requested
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  push:
+    branches:
+      - develop
+      - develop-*
+  release:
+    types:
+      - edited
+      - published
+  workflow_dispatch:
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    uses: felddy/reusable-workflows/.github/workflows/diagnostics.yml@76486c28caa391f5f9db4941fc555a20a6e084c8  # tag=v4.2.0
+
+  lint:
+    uses: felddy/reusable-workflows/.github/workflows/common-lint.yml@76486c28caa391f5f9db4941fc555a20a6e084c8  # tag=v4.2.0
+
+  config:
+    uses: ./.github/workflows/_config.yml
+
+  build:
+    needs: [config, diagnostics, lint]
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: felddy/reusable-workflows/.github/workflows/container-build.yml@76486c28caa391f5f9db4941fc555a20a6e084c8  # tag=v4.2.0
+    with:
+      image_name: ${{ needs.config.outputs.image_name }}
+      platforms: ${{ needs.config.outputs.platforms }}
+
+  test:
+    needs: [config, build]
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: felddy/reusable-workflows/.github/workflows/container-test.yml@76486c28caa391f5f9db4941fc555a20a6e084c8  # tag=v4.2.0
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    with:
+      image_name: ${{ needs.config.outputs.image_name }}
+      test_platforms: ${{ needs.config.outputs.test_platforms }}
+
+  publish-manifest:
+    needs: [config, build, test]
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: felddy/reusable-workflows/.github/workflows/container-publish-manifest.yml@76486c28caa391f5f9db4941fc555a20a6e084c8  # tag=v4.2.0
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      image_name: ${{ needs.config.outputs.image_name }}
+      platforms: ${{ needs.config.outputs.platforms }}
