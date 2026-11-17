@@ -94,10 +94,12 @@ class NmapImporter(object):
         f.close()
 
     def __store_port_details(self, parsed_host):
+        """Store open ports and return (has_open_ports, silent_port_count)."""
         # Get the name of the current thread
         thread_name = threading.current_thread().name
 
         has_at_least_one_open_port = False
+        silent_port_count = 0
         ip = parsed_host["addr"]
         host_doc = self.__db.HostDoc.get_by_ip(ip)
         if host_doc:
@@ -113,12 +115,12 @@ class NmapImporter(object):
             if (
                 details.get("service", {}).get("name") == "tcpwrapped"
             ):  # see https://secwiki.org/w/FAQ_tcpwrapped
-                details[
-                    "state"
-                ] = "silent"  # tcpwrapped services are "silent", not really open ports
-            else:
-                has_at_least_one_open_port = True
-                self.__ticket_manager.port_open(ip, port)
+                # tcpwrapped services are "silent", not really open ports, so
+                # they are counted on the host scans instead of stored.
+                silent_port_count += 1
+                continue
+            has_at_least_one_open_port = True
+            self.__ticket_manager.port_open(ip, port)
             details["port"] = port
             details["time"] = parsed_host["endtime"]
             details["source"] = NmapImporter.SOURCE
@@ -171,9 +173,9 @@ class NmapImporter(object):
                         self.__ticket_manager.open_ticket(
                             report, "potentially risky service detected"
                         )
-        return has_at_least_one_open_port
+        return has_at_least_one_open_port, silent_port_count
 
-    def __store_os_details(self, parsed_host):
+    def __store_os_details(self, parsed_host, silent_port_count):
         details = dict()
         if parsed_host.has_key("os"):
             util.copy_attrs(parsed_host["os"], details)
@@ -185,6 +187,7 @@ class NmapImporter(object):
         details["time"] = parsed_host["endtime"]
         details["source"] = NmapImporter.SOURCE
         details["latest"] = True
+        details["silent_port_count"] = silent_port_count
 
         ip = parsed_host["addr"]
         host_doc = self.__db.HostDoc.get_by_ip(ip)
@@ -211,8 +214,8 @@ class NmapImporter(object):
             host.save()
 
     def __baseline_host_callback(self, parsed_host):
-        self.__store_port_details(parsed_host)
-        self.__store_os_details(parsed_host)
+        _, silent_port_count = self.__store_port_details(parsed_host)
+        self.__store_os_details(parsed_host, silent_port_count)
         ip = parsed_host["addr"]
         up = parsed_host["state"] == "up"
         self.__ch_db.transition_host(ip, up=up, reason=parsed_host["state_reason"])
@@ -234,8 +237,10 @@ class NmapImporter(object):
         # clear previous latest flags as we are about to create new docs
         self.__db.HostScanDoc.reset_latest_flag_by_ip(ip)
         self.__db.PortScanDoc.reset_latest_flag_by_ip(ip)
-        has_at_least_one_open_port = self.__store_port_details(parsed_host)
-        self.__store_os_details(parsed_host)
+        has_at_least_one_open_port, silent_port_count = self.__store_port_details(
+            parsed_host
+        )
+        self.__store_os_details(parsed_host, silent_port_count)
         self.__ch_db.transition_host(ip, has_open_ports=has_at_least_one_open_port)
 
     def __end_callback(self):
